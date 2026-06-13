@@ -33,13 +33,13 @@ Feature: C-mcp REST Projects CRUD
     And the response error code is "PROJECT_NOT_FOUND"
 
   @US-040
-  Scenario: POST /api/projects with duplicate id returns 400
+  Scenario: POST /api/projects with duplicate id returns 409
     Given a project "proj-dup" exists in the registry
     When I POST "/api/projects" with bearer token "test-secret-123" and body:
       """
       {"id":"proj-dup","name":"Duplicate"}
       """
-    Then the response status is 400
+    Then the response status is 409
     And the response error code is "DUPLICATE_PROJECT_ID"
 
   @US-040
