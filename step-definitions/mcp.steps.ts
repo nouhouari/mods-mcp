@@ -1,22 +1,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import * as assert from 'assert';
-import * as cp from 'child_process';
 import { MpdsWorld } from '../support/world';
 import { createToken } from '../modules/tokens/index';
-
-// ---------------------------------------------------------------------------
-// Module augmentation — mirrors the one in support/mcp-server.hooks.ts and
-// support/mcp.hooks.ts. Both files merge into the same MpdsWorld interface
-// at compile time.
-// ---------------------------------------------------------------------------
-declare module '../support/world' {
-  interface MpdsWorld {
-    mcpPort: number;
-    mcpServerProcess: cp.ChildProcess | null;
-    lastStatus: number;
-    serverError: boolean;
-  }
-}
 
 function baseUrl(world: MpdsWorld): string {
   const port = process.env.MCP_PORT;

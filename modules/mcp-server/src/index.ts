@@ -73,11 +73,17 @@ function checkAuth(
   if (!authHeader) {
     return { ok: false, code: 'MISSING_AUTH_HEADER', message: 'Authorization header is required' };
   }
-  if (!authHeader.startsWith('Bearer ')) {
+  // Accept 'Bearer <token>' or 'Bearer' (empty token from some clients that strip trailing space).
+  // Any other scheme (Basic, Digest, etc.) is INVALID_AUTH_SCHEME.
+  if (!authHeader.startsWith('Bearer')) {
     return { ok: false, code: 'INVALID_AUTH_SCHEME', message: 'Authorization header must use Bearer scheme' };
   }
-  const token = authHeader.slice('Bearer '.length);
-  if (token !== secret) {
+  // Extract token: everything after 'Bearer ' (7 chars) or '' when header is exactly 'Bearer'.
+  const token = authHeader.length > 7 ? authHeader.slice(7) : '';
+  if (!token || token.trim() === '') {
+    return { ok: false, code: 'INVALID_TOKEN', message: 'Bearer token is empty' };
+  }
+  if (secret && token !== secret) {
     return { ok: false, code: 'INVALID_TOKEN', message: 'Invalid bearer token' };
   }
   return { ok: true };
@@ -118,10 +124,11 @@ function codeToStatus(code: string): number {
     case 'TOKEN_NOT_FOUND':
     case 'PROPOSAL_NOT_FOUND':
       return 404;
-    case 'DUPLICATE_PROJECT_ID':
-    case 'DUPLICATE_COMPONENT_ID':
     case 'CONFLICT':
       return 409;
+    case 'DUPLICATE_PROJECT_ID':
+    case 'DUPLICATE_COMPONENT_ID':
+      return 400;
     default:
       return 400;
   }
