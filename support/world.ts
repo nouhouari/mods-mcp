@@ -7,7 +7,23 @@ import * as path from 'path';
 setDefaultTimeout(30_000);
 
 export class MpdsWorld {
-  db!: Database.Database;
+  /**
+   * `db` is a live-connection getter: it calls getDb() each time so that
+   * even if a module's finally-block closed the singleton, the next access
+   * re-opens it at the current DB_PATH.
+   */
+  get db(): Database.Database {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('../modules/db/index').getDb();
+  }
+
+  // Kept for compatibility with step-defs that assign to this.db (none should,
+  // but the setter silently absorbs any stray assignment).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  set db(_value: Database.Database) {
+    // no-op: getDb() is the authoritative source
+  }
+
   dbPath!: string;
   lastResult: unknown = null;
   lastError: unknown = null;
@@ -19,27 +35,25 @@ export class MpdsWorld {
 setWorldConstructor(MpdsWorld);
 
 Before(async function (this: MpdsWorld) {
-  // Create a unique temp file so each scenario gets its own isolated DB
   this.dbPath = path.join(
     os.tmpdir(),
     `mpds-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`
   );
-  process.env.DB_PATH = this.dbPath;
-
-  // Import modules — they read process.env.DB_PATH fresh each call to getDb()
-  // so setting it before calling getDb() is sufficient.
+  // Reset singleton first so this scenario gets a fresh DB at its unique path
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const dbModule = require('../modules/db/index');
-  this.db = dbModule.getDb();
-  dbModule.runMigrations(this.db);
-  this.db.close();
-  // Re-open via getDb() so the db handle is fresh
-  this.db = dbModule.getDb();
+  dbModule.resetDb();
+  process.env.DB_PATH = this.dbPath;
+  // Open the singleton and run migrations; the getter keeps it accessible
+  const db = dbModule.getDb();
+  dbModule.runMigrations(db);
 });
 
 After(async function (this: MpdsWorld) {
   try {
-    this.db?.close();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const dbModule = require('../modules/db/index');
+    dbModule.resetDb();
   } catch (_) {}
   try {
     if (this.dbPath && fs.existsSync(this.dbPath)) {
