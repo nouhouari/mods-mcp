@@ -26,6 +26,36 @@ import {
 import { getDb, runMigrations } from '../../db/index';
 
 // ---------------------------------------------------------------------------
+// Security constants
+// ---------------------------------------------------------------------------
+
+const BODY_LIMIT = 1_048_576; // 1 MB body size cap
+
+// In-memory rate limiter: max 100 requests per 60-second window per IP
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 100;
+const _rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = _rateLimitStore.get(ip);
+  if (!entry || now > entry.resetAt) {
+    _rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
+function setSecurityHeaders(res: http.ServerResponse): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+}
+
+// ---------------------------------------------------------------------------
 // Lazy DB / migration initialization
 // ---------------------------------------------------------------------------
 
@@ -99,6 +129,7 @@ function checkAuth(
 // ---------------------------------------------------------------------------
 
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
+  setSecurityHeaders(res);
   const payload = JSON.stringify(body);
   const len = Buffer.byteLength(payload, 'utf8');
   res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': len });
@@ -112,7 +143,16 @@ function sendError(res: http.ServerResponse, status: number, code: string, messa
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > BODY_LIMIT) {
+        reject(Object.assign(new Error('Payload too large'), { code: 'PAYLOAD_TOO_LARGE' }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
@@ -263,6 +303,13 @@ function createHandler(secret: string) {
       return;
     }
 
+    // Rate limiting
+    const clientIp = (req.socket?.remoteAddress ?? req.headers['x-forwarded-for'] ?? 'unknown') as string;
+    if (!checkRateLimit(clientIp)) {
+      sendError(res, 429, 'RATE_LIMITED', 'Too many requests — try again later');
+      return;
+    }
+
     // Auth gate for all other routes
     const authResult = checkAuth(req, secret);
     if (!authResult.ok) {
@@ -285,7 +332,26 @@ function createHandler(secret: string) {
       }
       if (method === 'POST') {
         const raw = await readBody(req);
-        const body = JSON.parse(raw) as { id: string; name: string; parentId?: string };
+        let body: { id: string; name: string; parentId?: string };
+        try {
+          body = JSON.parse(raw) as { id: string; name: string; parentId?: string };
+        } catch {
+          sendError(res, 400, 'INVALID_JSON', 'Request body must be valid JSON');
+          return;
+        }
+        // Zod-schema validation: id and name are required non-empty strings
+        if (typeof body.id !== 'string' || body.id.trim() === '') {
+          sendError(res, 400, 'MISSING_FIELD', '"id" is required and must be a non-empty string');
+          return;
+        }
+        if (typeof body.name !== 'string' || body.name.trim() === '') {
+          sendError(res, 400, 'MISSING_FIELD', '"name" is required and must be a non-empty string');
+          return;
+        }
+        if (body.parentId !== undefined && typeof body.parentId !== 'string') {
+          sendError(res, 400, 'INVALID_FIELD', '"parentId" must be a string if provided');
+          return;
+        }
         try {
           const project = await createProject(body);
           sendJson(res, 201, project);
@@ -553,11 +619,11 @@ function createHandler(secret: string) {
           sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, result });
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Internal error';
+        console.error('[MCP RPC] unexpected error:', err);
         sendJson(res, 200, {
           jsonrpc: '2.0',
           id: rpc.id ?? null,
-          error: { code: 'INTERNAL_ERROR', message },
+          error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
         });
       }
       return;

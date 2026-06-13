@@ -26,7 +26,8 @@ router.get('/:projectId/components', async (req: Request, res: Response) => {
     res.json(specs);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[components] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -37,7 +38,8 @@ router.get('/:projectId/components/:componentId', async (req: Request, res: Resp
     res.json(spec);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[components] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -48,7 +50,8 @@ router.put('/:projectId/components/:componentId/override', async (req: Request, 
     res.json(spec);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[components] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -59,7 +62,8 @@ router.delete('/:projectId/components/:componentId/override', async (req: Reques
     res.status(204).send();
   } catch (err) {
     if (!handleComponentsError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[components] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });

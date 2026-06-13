@@ -33,18 +33,33 @@ router.get('/', async (_req: Request, res: Response) => {
     res.json(projects);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[projects] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
 
 router.post('/', async (req: Request, res: Response) => {
+  const { id, name, parentId } = (req.body ?? {}) as { id?: unknown; name?: unknown; parentId?: unknown };
+  if (typeof id !== 'string' || id.trim() === '') {
+    res.status(400).json({ error: { code: 'MISSING_FIELD', message: '"id" is required and must be a non-empty string' } });
+    return;
+  }
+  if (typeof name !== 'string' || name.trim() === '') {
+    res.status(400).json({ error: { code: 'MISSING_FIELD', message: '"name" is required and must be a non-empty string' } });
+    return;
+  }
+  if (parentId !== undefined && typeof parentId !== 'string') {
+    res.status(400).json({ error: { code: 'INVALID_FIELD', message: '"parentId" must be a string if provided' } });
+    return;
+  }
   try {
-    const project = await createProject(req.body);
+    const project = await createProject({ id, name, parentId });
     res.status(201).json(project);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[projects] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -55,7 +70,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     res.json(project);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[projects] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -66,7 +82,8 @@ router.patch('/:id', async (req: Request, res: Response) => {
     res.json(project);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[projects] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
@@ -77,7 +94,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (err) {
     if (!handleRegistryError(err, res)) {
-      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: String(err) } });
+      console.error('[projects] unexpected error:', err);
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
     }
   }
 });
