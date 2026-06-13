@@ -32,13 +32,6 @@ COPY --from=builder --chown=mpds:mpds /app/node_modules ./node_modules
 COPY --from=builder --chown=mpds:mpds /app/modules/mcp-server/node_modules ./modules/mcp-server/node_modules
 COPY --from=builder --chown=mpds:mpds /app/modules/mcp-server/dist ./modules/mcp-server/dist
 
-# Copy shared compiled modules that mcp-server imports at runtime
-COPY --from=builder --chown=mpds:mpds /app/modules/db ./modules/db
-COPY --from=builder --chown=mpds:mpds /app/modules/registry ./modules/registry
-COPY --from=builder --chown=mpds:mpds /app/modules/tokens ./modules/tokens
-COPY --from=builder --chown=mpds:mpds /app/modules/components ./modules/components
-COPY --from=builder --chown=mpds:mpds /app/modules/validate ./modules/validate
-
 # Persistent volume for the SQLite database file (D3)
 VOLUME /home/mpds/data
 

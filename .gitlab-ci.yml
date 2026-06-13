@@ -50,7 +50,7 @@ scan:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker pull $DOCKER_IMAGE:$CI_COMMIT_SHA
   script:
-    - docker run --rm aquasec/trivy:latest image --exit-code 0 --no-progress $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker run --rm aquasec/trivy:latest image --exit-code 1 --severity CRITICAL,HIGH --no-progress $DOCKER_IMAGE:$CI_COMMIT_SHA
   artifacts:
     when: always
     paths:
@@ -65,7 +65,7 @@ e2e:
   services:
     - name: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       alias: mcp-server
-  needs: [build]
+  needs: [build, scan]
   variables:
     # Pull the pre-built image — do not rebuild (D7)
     DOCKER_IMAGE_TAG: $CI_COMMIT_SHA

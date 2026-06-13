@@ -22,7 +22,10 @@ function validateDbPath(raw: string): string {
   return resolved;
 }
 
-const DB_PATH = (): string => validateDbPath(process.env.DB_PATH ?? ':memory:');
+const DB_PATH = (): string => {
+  if (!process.env.DB_PATH) throw new Error('DB_PATH must be set in production');
+  return validateDbPath(process.env.DB_PATH);
+};
 
 // Module-level singleton
 let _db: Database.Database | undefined;

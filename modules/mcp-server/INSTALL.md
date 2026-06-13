@@ -144,32 +144,33 @@ The MCP server uses SQLite for persistent storage. The database is initialized a
 
 Database location: `.requ/requ.db` (shared with the main MPDS project).
 
-## Docker (Optional)
+## Docker
 
-If you prefer containerized deployment, add a `Dockerfile` in the module root:
+The component ships a multi-stage `Dockerfile` (at the repository root) that produces a minimal, non-root Alpine image.
 
-```dockerfile
-FROM node:18-alpine
+### Build the image
 
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
-
-COPY src ./src
-COPY tsconfig.json ./
-RUN npm run build
-
-EXPOSE 3100
-
-CMD ["npm", "start"]
-```
-
-Build and run:
+Run from the monorepo root (where `Dockerfile` lives):
 
 ```bash
-docker build -t mpds-mcp-server .
-docker run -e MCP_SECRET=secret-token -e MPDS_ENV=production -p 3100:3100 mpds-mcp-server
+docker build -t mpds-mcp-server:latest .
 ```
+
+### Run the container
+
+```bash
+docker run \
+  -e MCP_SECRET=secret-token \
+  -e MPDS_ENV=production \
+  -e DB_PATH=/data/mpds.db \
+  -v $(pwd)/data:/data \
+  -p 3100:3100 \
+  mpds-mcp-server:latest
+```
+
+> `DB_PATH` is required in production — the server exits immediately if it is unset.
+
+Health-check: `curl http://localhost:3100/health`
 
 ## Troubleshooting
 
