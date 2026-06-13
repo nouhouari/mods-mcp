@@ -1,0 +1,10 @@
+{
+  "name": "@mpds/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "build": "tsc --outDir dist"
+  }
+}

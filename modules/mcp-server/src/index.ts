@@ -1,19 +1,32 @@
 import * as http from 'http';
-import { listProjects, getProject, RegistryError } from '../../registry/index';
-import { resolveTokens, TokensError } from '../../tokens/index';
-import { listSpecs, getSpec, ComponentsError } from '../../components/index';
+import {
+  listProjects,
+  getProject,
+  createProject,
+  deleteProject,
+  RegistryError,
+} from '../../registry/index';
+import {
+  resolveTokens,
+  deleteOverride as deleteTokenOverride,
+  TokensError,
+} from '../../tokens/index';
+import {
+  listSpecs,
+  getSpec,
+  ComponentsError,
+} from '../../components/index';
+import {
+  validateColorPair,
+  validateSnippet,
+  ValidateError,
+  COLOR_FORMAT_RE,
+} from '../../validate/index';
 import { getDb, runMigrations } from '../../db/index';
 
 // ---------------------------------------------------------------------------
 // Lazy DB / migration initialization
 // ---------------------------------------------------------------------------
-// Migrations are NOT run at startServer() time. Instead they run on the first
-// authenticated request so that:
-// 1. In in-process test mode: startServer() runs before world.ts sets DB_PATH,
-//    but by the time the first request arrives, world.ts has set DB_PATH and
-//    already run migrations — ensureMigrations() is then a no-op.
-// 2. In subprocess mode: DB_PATH is set at spawn time; on first request we
-//    open the DB and run any pending migrations before serving data.
 
 let _migrationsApplied = false;
 
@@ -22,7 +35,19 @@ function ensureMigrations(): void {
   _migrationsApplied = true;
   const db = getDb();
   runMigrations(db);
-  // Do NOT close the DB here — keep the singleton open for subsequent callers.
+  // Ensure proposals table (added post-migrations)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS proposals (
+      id         TEXT NOT NULL PRIMARY KEY,
+      project_id TEXT,
+      type       TEXT NOT NULL DEFAULT 'token',
+      payload    TEXT NOT NULL DEFAULT '{}',
+      status     TEXT NOT NULL DEFAULT 'pending',
+      note       TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +62,7 @@ interface JsonRpcRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Auth middleware helper
+// Auth
 // ---------------------------------------------------------------------------
 
 function checkAuth(
@@ -65,20 +90,13 @@ function checkAuth(
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   const len = Buffer.byteLength(payload, 'utf8');
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Content-Length': len,
-  });
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': len });
   res.end(payload);
 }
 
-function sendAuthError(res: http.ServerResponse, code: string, message: string): void {
-  sendJson(res, 401, { error: { code, message } });
+function sendError(res: http.ServerResponse, status: number, code: string, message: string): void {
+  sendJson(res, status, { error: { code, message } });
 }
-
-// ---------------------------------------------------------------------------
-// Body reader
-// ---------------------------------------------------------------------------
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -87,6 +105,26 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Error code to HTTP status
+// ---------------------------------------------------------------------------
+
+function codeToStatus(code: string): number {
+  switch (code) {
+    case 'PROJECT_NOT_FOUND':
+    case 'COMPONENT_NOT_FOUND':
+    case 'TOKEN_NOT_FOUND':
+    case 'PROPOSAL_NOT_FOUND':
+      return 404;
+    case 'DUPLICATE_PROJECT_ID':
+    case 'DUPLICATE_COMPONENT_ID':
+    case 'CONFLICT':
+      return 409;
+    default:
+      return 400;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -100,22 +138,27 @@ async function dispatchMcp(
 
   try {
     switch (rpc.method) {
+      case 'list_projects': {
+        const projects = await listProjects();
+        return { result: projects };
+      }
+
       case 'get_tokens': {
         const projectId = params['projectId'] as string;
         const category = params['category'] as string | undefined;
+        // Validate project exists — throws if not found
+        await getProject(projectId);
         const tokens = await resolveTokens(projectId, category);
         return { result: tokens };
       }
 
       case 'get_design_system': {
         const projectId = params['projectId'] as string;
-        // Validate project exists (throws RegistryError if not found)
         await getProject(projectId);
         const [resolved, components] = await Promise.all([
           resolveTokens(projectId),
           listSpecs(projectId),
         ]);
-        // Build token map keyed by token key
         const tokenMap: Record<string, { value: string; category: string; source: string }> = {};
         for (const t of resolved) {
           tokenMap[t.key] = { value: t.value, category: t.category, source: t.source };
@@ -130,20 +173,57 @@ async function dispatchMcp(
         return { result: spec };
       }
 
+      case 'validate_color_pair': {
+        const { fg, bg, context } = params as { fg: string; bg: string; context: string };
+        const result = validateColorPair(fg, bg, context as 'normal' | 'large' | 'ui');
+        return { result };
+      }
+
+      case 'validate_token_pair': {
+        const { projectId, fgKey, bgKey, context } = params as {
+          projectId: string;
+          fgKey: string;
+          bgKey: string;
+          context: string;
+        };
+        await getProject(projectId);
+        const allTokens = await resolveTokens(projectId);
+        const fgToken = allTokens.find((t) => t.key === fgKey);
+        const bgToken = allTokens.find((t) => t.key === bgKey);
+        if (!fgToken || !bgToken) {
+          return { error: { code: 'TOKEN_NOT_FOUND', message: 'One or more token keys not found' } };
+        }
+        const result = validateColorPair(
+          fgToken.value,
+          bgToken.value,
+          context as 'normal' | 'large' | 'ui'
+        );
+        return {
+          result: { ...result, resolvedFg: fgToken.value, resolvedBg: bgToken.value },
+        };
+      }
+
+      case 'validate_snippet': {
+        const { content, contentType } = params as { content: string; contentType?: 'html' | 'jsx' };
+        const report = validateSnippet({ content, contentType: contentType ?? 'html' });
+        return { result: report };
+      }
+
       default:
         return {
-          error: { code: 'METHOD_NOT_FOUND', message: `Unknown method: ${rpc.method}` },
+          error: { code: 'METHOD_NOT_FOUND', message: 'Unknown method: ' + rpc.method },
         };
     }
   } catch (err: unknown) {
     if (
       err instanceof RegistryError ||
       err instanceof TokensError ||
-      err instanceof ComponentsError
+      err instanceof ComponentsError ||
+      err instanceof ValidateError
     ) {
       return {
         error: {
-          code: (err as RegistryError).code,
+          code: (err as RegistryError & { code: string }).code,
           message: (err as Error).message,
         },
       };
@@ -153,7 +233,7 @@ async function dispatchMcp(
 }
 
 // ---------------------------------------------------------------------------
-// Request handler factory
+// Request handler
 // ---------------------------------------------------------------------------
 
 function createHandler(secret: string) {
@@ -161,35 +241,265 @@ function createHandler(secret: string) {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ): Promise<void> {
-    const urlStr = req.url ?? '/';
+    // Strip query string for routing
+    const urlStr = (req.url ?? '/').split('?')[0];
+    const rawUrl = req.url ?? '/';
     const method = req.method ?? 'GET';
 
-    // GET /health — unauthenticated liveness probe
+    // GET /health — no auth required
     if (method === 'GET' && urlStr === '/health') {
       sendJson(res, 200, { status: 'ok' });
       return;
     }
 
-    // Auth check for all other routes
+    // Auth gate for all other routes
     const authResult = checkAuth(req, secret);
     if (!authResult.ok) {
-      sendAuthError(res, authResult.code, authResult.message);
+      sendError(res, 401, authResult.code, authResult.message);
       return;
     }
 
-    // Ensure DB schema is in place before any data access.
-    // This is a no-op if migrations were already applied (world.ts in-process
-    // mode, or a previous request in subprocess mode).
+    // Ensure DB schema before first data access
     ensureMigrations();
 
-    // GET /api/projects — list all projects
-    if (method === 'GET' && urlStr === '/api/projects') {
-      const projects = await listProjects();
-      sendJson(res, 200, projects);
+    // -----------------------------------------------------------------------
+    // Projects
+    // -----------------------------------------------------------------------
+
+    if (urlStr === '/api/projects') {
+      if (method === 'GET') {
+        const projects = await listProjects();
+        sendJson(res, 200, projects);
+        return;
+      }
+      if (method === 'POST') {
+        const raw = await readBody(req);
+        const body = JSON.parse(raw) as { id: string; name: string; parentId?: string };
+        try {
+          const project = await createProject(body);
+          sendJson(res, 201, project);
+        } catch (err) {
+          if (err instanceof RegistryError) {
+            sendError(res, codeToStatus(err.code), err.code, err.message);
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+    }
+
+    // /api/projects/:projectId
+    const projectMatch = urlStr.match(/^\/api\/projects\/([^/]+)$/);
+    if (projectMatch) {
+      const projectId = decodeURIComponent(projectMatch[1]);
+      if (method === 'GET') {
+        try {
+          const project = await getProject(projectId);
+          sendJson(res, 200, project);
+        } catch (err) {
+          if (err instanceof RegistryError) {
+            sendError(res, codeToStatus(err.code), err.code, err.message);
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+      if (method === 'DELETE') {
+        try {
+          await deleteProject(projectId);
+          res.writeHead(204);
+          res.end();
+        } catch (err) {
+          if (err instanceof RegistryError) {
+            sendError(res, codeToStatus(err.code), err.code, err.message);
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tokens
+    // -----------------------------------------------------------------------
+
+    // GET /api/projects/:projectId/tokens
+    const tokensListMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/tokens$/);
+    if (tokensListMatch && method === 'GET') {
+      const projectId = decodeURIComponent(tokensListMatch[1]);
+      const qs = new URLSearchParams(rawUrl.includes('?') ? rawUrl.split('?')[1] : '');
+      const category = qs.get('category') ?? undefined;
+      try {
+        const tokens = await resolveTokens(projectId, category);
+        sendJson(res, 200, tokens);
+      } catch (err) {
+        if (err instanceof TokensError || err instanceof RegistryError) {
+          const e = err as TokensError & { code: string };
+          sendError(res, codeToStatus(e.code), e.code, e.message);
+          return;
+        }
+        throw err;
+      }
       return;
     }
 
-    // POST /mcp — JSON-RPC 2.0 dispatcher
+    // DELETE /api/projects/:projectId/tokens/:key/override
+    const tokenOverrideDeleteMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/tokens\/([^/]+)\/override$/);
+    if (tokenOverrideDeleteMatch && method === 'DELETE') {
+      const projectId = decodeURIComponent(tokenOverrideDeleteMatch[1]);
+      const key = decodeURIComponent(tokenOverrideDeleteMatch[2]);
+      try {
+        await deleteTokenOverride(projectId, key);
+        res.writeHead(204);
+        res.end();
+      } catch (err) {
+        if (err instanceof TokensError) {
+          sendError(res, codeToStatus(err.code), err.code, err.message);
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // PUT /api/projects/:projectId/tokens/:key
+    const tokenPutMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/tokens\/([^/]+)$/);
+    if (tokenPutMatch && method === 'PUT') {
+      const { setOverride: setTokenOverride } = await import('../../tokens/index');
+      const projectId = decodeURIComponent(tokenPutMatch[1]);
+      const key = decodeURIComponent(tokenPutMatch[2]);
+      const raw = await readBody(req);
+      const body = JSON.parse(raw) as { value: string; version: number };
+      const ifMatch = req.headers['if-match'];
+      const version = ifMatch ? parseInt(ifMatch.replace(/"/g, ''), 10) : body.version;
+      try {
+        const token = await setTokenOverride(projectId, key, body.value, version);
+        sendJson(res, 200, token);
+      } catch (err) {
+        if (err instanceof TokensError) {
+          sendError(res, codeToStatus(err.code), err.code, err.message);
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Components
+    // -----------------------------------------------------------------------
+
+    // GET /api/projects/:projectId/components
+    const componentsListMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/components$/);
+    if (componentsListMatch && method === 'GET') {
+      const projectId = decodeURIComponent(componentsListMatch[1]);
+      try {
+        const specs = await listSpecs(projectId);
+        sendJson(res, 200, specs);
+      } catch (err) {
+        if (err instanceof ComponentsError || err instanceof RegistryError) {
+          const e = err as ComponentsError & { code: string };
+          sendError(res, codeToStatus(e.code), e.code, e.message);
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // GET /api/projects/:projectId/components/:componentId
+    const componentGetMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/components\/([^/]+)$/);
+    if (componentGetMatch && method === 'GET') {
+      const projectId = decodeURIComponent(componentGetMatch[1]);
+      const componentId = decodeURIComponent(componentGetMatch[2]);
+      try {
+        const spec = await getSpec(projectId, componentId);
+        sendJson(res, 200, spec);
+      } catch (err) {
+        if (err instanceof ComponentsError || err instanceof RegistryError) {
+          const e = err as ComponentsError & { code: string };
+          sendError(res, codeToStatus(e.code), e.code, e.message);
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // PUT /api/projects/:projectId/components/:componentId/override
+    const componentOverridePutMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/components\/([^/]+)\/override$/);
+    if (componentOverridePutMatch) {
+      const { setOverride: setCompOverride, deleteOverride: deleteCompOverride } = await import(
+        '../../components/index'
+      );
+      const projectId = decodeURIComponent(componentOverridePutMatch[1]);
+      const componentId = decodeURIComponent(componentOverridePutMatch[2]);
+      if (method === 'PUT') {
+        const raw = await readBody(req);
+        const body = JSON.parse(raw);
+        try {
+          const spec = await setCompOverride(projectId, componentId, body);
+          sendJson(res, 200, spec);
+        } catch (err) {
+          if (err instanceof ComponentsError) {
+            sendError(res, codeToStatus(err.code), err.code, err.message);
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+      if (method === 'DELETE') {
+        try {
+          await deleteCompOverride(projectId, componentId);
+          res.writeHead(204);
+          res.end();
+        } catch (err) {
+          if (err instanceof ComponentsError) {
+            sendError(res, codeToStatus(err.code), err.code, err.message);
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Validate
+    // -----------------------------------------------------------------------
+
+    if (method === 'POST' && urlStr === '/api/validate/color-pair') {
+      const raw = await readBody(req);
+      const { fg, bg, context } = JSON.parse(raw) as { fg: string; bg: string; context: string };
+      if (!COLOR_FORMAT_RE.test(fg) || !COLOR_FORMAT_RE.test(bg)) {
+        sendError(res, 400, 'INVALID_COLOR_FORMAT', 'Color must be #RGB, #RRGGBB, or rgb(R,G,B).');
+        return;
+      }
+      if (!['normal', 'large', 'ui'].includes(context)) {
+        sendError(res, 400, 'INVALID_CONTEXT', 'Context must be normal, large, or ui.');
+        return;
+      }
+      try {
+        const result = validateColorPair(fg, bg, context as 'normal' | 'large' | 'ui');
+        sendJson(res, 200, result);
+      } catch (err) {
+        if (err instanceof ValidateError) {
+          sendError(res, 400, err.code, err.message);
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // MCP JSON-RPC 2.0
+    // -----------------------------------------------------------------------
+
     if (method === 'POST' && urlStr === '/mcp') {
       let rpc: JsonRpcRequest;
       try {
@@ -204,24 +514,31 @@ function createHandler(secret: string) {
         return;
       }
 
-      const { result, error } = await dispatchMcp(rpc);
-      if (error) {
-        sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, error });
-      } else {
-        sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, result });
+      try {
+        const { result, error } = await dispatchMcp(rpc);
+        if (error) {
+          sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, error });
+        } else {
+          sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, result });
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal error';
+        sendJson(res, 200, {
+          jsonrpc: '2.0',
+          id: rpc.id ?? null,
+          error: { code: 'INTERNAL_ERROR', message },
+        });
       }
       return;
     }
 
-    // 404 for any other path
-    sendJson(res, 404, {
-      error: { code: 'NOT_FOUND', message: `${method} ${urlStr} not found` },
-    });
+    // 404 fallthrough
+    sendError(res, 404, 'NOT_FOUND', method + ' ' + urlStr + ' not found');
   };
 }
 
 // ---------------------------------------------------------------------------
-// startServer — exported for programmatic use and called from CLI entry point
+// startServer
 // ---------------------------------------------------------------------------
 
 export async function startServer(opts?: {
@@ -231,9 +548,7 @@ export async function startServer(opts?: {
   const secret = opts?.secret ?? process.env['MCP_SECRET'] ?? '';
   const requestedPort = opts?.port ?? Number(process.env['MCP_PORT'] ?? 0);
 
-  // Reset so ensureMigrations() re-runs for this new server instance.
-  // Important in in-process test mode where world.ts resetDb() clears the old
-  // DB between scenarios — the new scenario needs migrations applied on its DB.
+  // Reset migration flag so ensureMigrations() re-runs for this server instance.
   _migrationsApplied = false;
 
   const handler = createHandler(secret);
@@ -264,16 +579,23 @@ export async function startServer(opts?: {
 }
 
 // ---------------------------------------------------------------------------
-// CLI entry point — spawned by mcp-server.hooks.ts via node + ts-node
+// CLI entry point — spawned by mcp-server.hooks.ts
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
+  if (process.env['MPDS_ENV'] === 'production' && !process.env['MCP_SECRET']) {
+    process.stderr.write('[FATAL] MCP_SECRET must be set in production mode\n');
+    process.exit(1);
+  }
+
+  const authStatus = process.env['MCP_SECRET'] ? 'enabled' : 'disabled';
+
   startServer()
     .then(({ port }) => {
-      process.stdout.write(`MCP server listening on port ${port}\n`);
+      process.stdout.write('MPDS-MCP listening on port ' + port + ' [auth: ' + authStatus + ']\n');
     })
     .catch((err: unknown) => {
-      process.stderr.write(`Failed to start MCP server: ${err}\n`);
+      process.stderr.write('Failed to start MCP server: ' + err + '\n');
       process.exit(1);
     });
 }
