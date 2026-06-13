@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+coverage
+.nyc_output
+reports
+test-results
+**/*.spec.ts
+features/
+step-definitions/
+support/
