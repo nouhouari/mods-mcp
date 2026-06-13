@@ -22,7 +22,7 @@ function handleComponentsError(err: unknown, res: Response): boolean {
 
 router.get('/:projectId/components', async (req: Request, res: Response) => {
   try {
-    const specs = await listSpecs(req.params.projectId);
+    const specs = await listSpecs(req.params['projectId'] as string);
     res.json(specs);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
@@ -33,7 +33,7 @@ router.get('/:projectId/components', async (req: Request, res: Response) => {
 
 router.get('/:projectId/components/:componentId', async (req: Request, res: Response) => {
   try {
-    const spec = await getSpec(req.params.projectId, req.params.componentId);
+    const spec = await getSpec(req.params['projectId'] as string, req.params['componentId'] as string);
     res.json(spec);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
@@ -44,7 +44,7 @@ router.get('/:projectId/components/:componentId', async (req: Request, res: Resp
 
 router.put('/:projectId/components/:componentId/override', async (req: Request, res: Response) => {
   try {
-    const spec = await setOverride(req.params.projectId, req.params.componentId, req.body);
+    const spec = await setOverride(req.params['projectId'] as string, req.params['componentId'] as string, req.body);
     res.json(spec);
   } catch (err) {
     if (!handleComponentsError(err, res)) {
@@ -55,7 +55,7 @@ router.put('/:projectId/components/:componentId/override', async (req: Request, 
 
 router.delete('/:projectId/components/:componentId/override', async (req: Request, res: Response) => {
   try {
-    await deleteOverride(req.params.projectId, req.params.componentId);
+    await deleteOverride(req.params['projectId'] as string, req.params['componentId'] as string);
     res.status(204).send();
   } catch (err) {
     if (!handleComponentsError(err, res)) {

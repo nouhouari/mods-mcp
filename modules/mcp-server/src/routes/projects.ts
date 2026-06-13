@@ -51,7 +51,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const project = await getProject(req.params.id);
+    const project = await getProject(req.params['id'] as string);
     res.json(project);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
@@ -62,7 +62,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
-    const project = await updateProject(req.params.id, req.body);
+    const project = await updateProject(req.params['id'] as string, req.body);
     res.json(project);
   } catch (err) {
     if (!handleRegistryError(err, res)) {
@@ -73,7 +73,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await deleteProject(req.params.id);
+    await deleteProject(req.params['id'] as string);
     res.status(204).send();
   } catch (err) {
     if (!handleRegistryError(err, res)) {

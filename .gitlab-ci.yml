@@ -4,7 +4,7 @@ stages:
   - deploy
 
 variables:
-  DOCKER_IMAGE: $CI_REGISTRY_IMAGE/mpds-mcp
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE
 
 test:
   stage: test
