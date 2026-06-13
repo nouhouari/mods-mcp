@@ -111,7 +111,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.json({
       jsonrpc: '2.0',
       id,
-      error: { code: -32603, message: err.message ?? String(err) },
+      error: { code: -32603, message: 'Internal server error' },
     });
   }
 });

@@ -614,8 +614,8 @@ export async function startServer(opts?: {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  if (!process.env['MCP_SECRET']) {
-    process.stderr.write('[FATAL] MCP_SECRET must be set in all environments\n');
+  if (process.env['MPDS_ENV'] === 'production' && !process.env['MCP_SECRET']) {
+    process.stderr.write('[FATAL] MCP_SECRET must be set in production\n');
     process.exit(1);
   }
 

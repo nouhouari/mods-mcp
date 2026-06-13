@@ -233,11 +233,10 @@ export function validateSnippet(input: SnippetInput | string, contentType?: 'htm
       }
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
     violations.push({
       criterion: 'parse',
       severity: 'error',
-      description: 'Failed to parse ' + type + ' snippet: ' + message,
+      description: 'Internal server error',
       remediation: 'Ensure the snippet is valid HTML or JSX.',
     });
   }

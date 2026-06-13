@@ -11,6 +11,16 @@ function baseUrl(world: MpdsWorld): string {
   return `http://127.0.0.1:${port}`;
 }
 
+// Resolve 'test-secret' to the scenario-isolated secret stored on the world.
+// Any other value is used as-is (e.g. 'wrong-token' for negative tests).
+function resolveToken(world: MpdsWorld, token: string): string {
+  if (token === 'test-secret') {
+    if (!world.mcpSecret) throw new Error('mcpSecret not set on world — check mcp.hooks.ts');
+    return world.mcpSecret;
+  }
+  return token;
+}
+
 // ---------------------------------------------------------------------------
 // Given — data setup (new steps only; server/project/component steps are in
 // mcp-server.steps.ts and shared across all scenarios)
@@ -73,7 +83,7 @@ When(
     const url = `${baseUrl(this)}${urlPath}`;
     const res = await fetch(url, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${resolveToken(this, token)}` },
     });
     this.lastStatus = res.status;
     try {
@@ -150,7 +160,7 @@ When(
     const res = await fetch(url, {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${resolveToken(this, token)}`,
         'Content-Type': 'application/json',
       },
       body: body.trim(),

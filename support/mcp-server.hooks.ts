@@ -17,6 +17,7 @@ declare module './world' {
     mcpServerProcess: cp.ChildProcess | null;
     lastStatus: number;
     serverError: boolean;
+    mcpSecret: string;
   }
 }
 
@@ -35,12 +36,13 @@ Before({ tags: '@mcp-server' }, async function (this: MpdsWorld) {
   this.mcpServerProcess = null;
 
   try {
-    const secret = crypto.randomBytes(16).toString('hex');
+    const secret = crypto.randomBytes(32).toString('hex');
     const { port, close } = await startServer({
       secret,
       port: 0, // OS-assigned
     });
     this.mcpPort = port;
+    this.mcpSecret = secret;
     process.env.MCP_PORT = String(port);
     process.env.MCP_SECRET = secret;
     serverCloseMap.set(this, close);

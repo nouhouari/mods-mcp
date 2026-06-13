@@ -2,7 +2,7 @@
 Feature: C-mcp Transport Authentication (@US-026)
 
   Background:
-    Given the MCP server is running with secret "test-secret-123"
+    Given the MCP server is running with secret "test-secret"
 
   @US-026
   Scenario: Health endpoint returns 200 without auth
@@ -39,7 +39,7 @@ Feature: C-mcp Transport Authentication (@US-026)
 
   @US-026
   Scenario: POST /mcp with correct bearer returns 200
-    When I POST "/mcp" with bearer token "test-secret-123" and body:
+    When I POST "/mcp" with bearer token "test-secret" and body:
       """
       {"jsonrpc":"2.0","id":5,"method":"list_projects","params":{}}
       """

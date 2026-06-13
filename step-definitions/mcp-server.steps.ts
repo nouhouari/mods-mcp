@@ -15,6 +15,7 @@ declare module '../support/world' {
     mcpServerProcess: cp.ChildProcess | null;
     lastStatus: number;
     serverError: boolean;
+    mcpSecret: string;
   }
 }
 
@@ -32,12 +33,15 @@ function baseUrl(world: MpdsWorld): string {
   return `http://127.0.0.1:${port}`;
 }
 
-// Resolve 'test-secret' to the actual secret configured in the test hook.
+// Resolve 'test-secret' to the scenario-isolated secret.
+// Prefers world.mcpSecret (set by both hook sets, no race) then falls back to
+// process.env.MCP_SECRET for backward compatibility.
 // Other token values (e.g. 'wrong-token') are used as-is for negative tests.
-function resolveToken(token: string): string {
+function resolveToken(world: MpdsWorld, token: string): string {
   if (token === 'test-secret') {
-    if (!process.env.MCP_SECRET) throw new Error('MCP_SECRET must be set (check mcp-server.hooks.ts)');
-    return process.env.MCP_SECRET;
+    const secret = world.mcpSecret || process.env.MCP_SECRET;
+    if (!secret) throw new Error('mcpSecret not set — check mcp.hooks.ts or mcp-server.hooks.ts');
+    return secret;
   }
   return token;
 }
@@ -100,7 +104,7 @@ When(
     const url = `${baseUrl(this)}${urlPath}`;
     const res = await fetch(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${resolveToken(token)}` },
+      headers: { Authorization: `Bearer ${resolveToken(this, token)}` },
     });
     this.lastStatus = res.status;
     try {
@@ -118,7 +122,7 @@ When(
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${resolveToken(token)}`,
+        Authorization: `Bearer ${resolveToken(this, token)}`,
         'Content-Type': 'application/json',
       },
       body: body.trim(),

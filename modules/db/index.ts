@@ -6,11 +6,14 @@ import * as os from 'os';
 
 // Compute allowed path prefixes at module load — includes the real tmpdir
 // (on macOS, os.tmpdir() is /var/folders/…, not /tmp/)
+// HOME must be non-empty before being added: an empty HOME would produce '/'
+// which matches every absolute path and defeats the allowlist.
+const _home = process.env.HOME;
 const ALLOWED_DB_PATH_PREFIXES = [
   '/tmp/',
   path.resolve('/tmp') + '/',
   os.tmpdir() + '/',
-  (process.env.HOME ?? '') + '/',
+  ...(_home ? [_home + '/'] : []),
 ];
 
 function validateDbPath(raw: string): string {

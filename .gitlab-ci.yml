@@ -90,7 +90,7 @@ e2e:
 deploy:
   stage: deploy
   image: alpine
-  needs: [scan]
+  needs: [scan, e2e]
   script:
     - echo "Deploy $DOCKER_IMAGE:$CI_COMMIT_SHA"
   environment:

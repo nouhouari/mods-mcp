@@ -2,11 +2,11 @@
 Feature: C-mcp REST Validate Endpoint
 
   Background:
-    Given the MCP server is running with secret "test-secret-123"
+    Given the MCP server is running with secret "test-secret"
 
   @US-027
   Scenario: POST /api/validate/color-pair black on white passes
-    When I POST "/api/validate/color-pair" with bearer token "test-secret-123" and body:
+    When I POST "/api/validate/color-pair" with bearer token "test-secret" and body:
       """
       {"fg":"#000000","bg":"#FFFFFF","context":"normal"}
       """
@@ -16,7 +16,7 @@ Feature: C-mcp REST Validate Endpoint
 
   @US-027
   Scenario: POST /api/validate/color-pair #777777 on white fails
-    When I POST "/api/validate/color-pair" with bearer token "test-secret-123" and body:
+    When I POST "/api/validate/color-pair" with bearer token "test-secret" and body:
       """
       {"fg":"#777777","bg":"#FFFFFF","context":"normal"}
       """
@@ -25,7 +25,7 @@ Feature: C-mcp REST Validate Endpoint
 
   @US-027
   Scenario: POST /api/validate/color-pair with invalid color returns 400
-    When I POST "/api/validate/color-pair" with bearer token "test-secret-123" and body:
+    When I POST "/api/validate/color-pair" with bearer token "test-secret" and body:
       """
       {"fg":"notacolor","bg":"#FFFFFF","context":"normal"}
       """
