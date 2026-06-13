@@ -1,0 +1,1449 @@
+# FROZEN — do not edit without re-freezing (run lint + breaking-change detection)
+# Project:  MPDS-MCP (Multi Project Design System MCP Server)
+# Module:   C-mcp — MCP-over-HTTP server + REST facade for C-webui
+# Frozen:   2026-06-13
+# Review gates required before any change: code-quality, security (auth surface / public endpoints)
+
+openapi: 3.1.0
+
+info:
+  title: MPDS-MCP — C-mcp API
+  version: 1.0.0
+  description: |
+    HTTP server wrapping the MCP SDK (Express/Hono). Exposes:
+    - POST /mcp — MCP JSON-RPC endpoint for AI assistant tool calls
+    - /api/* — REST endpoints consumed by C-webui (projects, tokens, components, validation, proposals)
+
+    Auth: every endpoint requires `Authorization: Bearer <MCP_SECRET>`.
+
+    Error envelope (all non-2xx responses):
+    ```
+    { "error": { "code": "<ERROR_CODE>", "message": "<human-readable>" } }
+    ```
+
+    Phase tags: operations without `x-phase` are P1 (MVP). P2/P3 operations are noted and
+    should be behind feature flags until their phase ships.
+
+servers:
+  - url: http://localhost:3100
+    description: Local development (default MCP_PORT=3100)
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /api/projects:
+    get:
+      operationId: listProjects
+      summary: List all projects
+      description: Returns every project registered in the registry. REQ-016.
+      tags: [Projects]
+      responses:
+        "200":
+          description: Array of projects (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+              examples:
+                twoProjects:
+                  summary: Two projects, one child
+                  value:
+                    - id: base
+                      name: "Base Design System"
+                      parentId: null
+                      createdAt: "2026-06-01T00:00:00.000Z"
+                    - id: proj-acme
+                      name: "Acme Web App"
+                      parentId: base
+                      createdAt: "2026-06-10T09:30:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createProject
+      summary: Create a new project
+      description: |
+        Creates a new project. If `parentId` is supplied the project inherits that
+        project's tokens and components (resolved view). REQ-001.
+      tags: [Projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectInput"
+            examples:
+              childProject:
+                summary: Create a child project
+                value:
+                  id: proj-acme
+                  name: "Acme Web App"
+                  parentId: base
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+              examples:
+                created:
+                  summary: Newly created project
+                  value:
+                    id: proj-acme
+                    name: "Acme Web App"
+                    parentId: base
+                    createdAt: "2026-06-13T10:00:00.000Z"
+        "400":
+          description: Validation error or business rule violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                duplicateId:
+                  summary: Duplicate project ID
+                  value:
+                    error:
+                      code: DUPLICATE_PROJECT_ID
+                      message: "A project with id 'proj-acme' already exists."
+                maxDepth:
+                  summary: Inheritance depth exceeded
+                  value:
+                    error:
+                      code: MAX_INHERITANCE_DEPTH
+                      message: "Cannot create project: maximum inheritance depth reached."
+        "404":
+          description: Parent project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                parentNotFound:
+                  value:
+                    error:
+                      code: PROJECT_NOT_FOUND
+                      message: "Parent project 'unknown-parent' not found."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: getProject
+      summary: Get a project by ID
+      description: Returns a single project. REQ-001.
+      tags: [Projects]
+      responses:
+        "200":
+          description: Project found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      operationId: deleteProject
+      summary: Delete a project
+      description: |
+        Deletes a project. Fails if the project has children (`BASE_HAS_CHILDREN`)
+        or if it still has tokens (`PROJECT_HAS_TOKENS`). REQ-001.
+      tags: [Projects]
+      responses:
+        "204":
+          description: Project deleted
+        "400":
+          description: Business rule prevents deletion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                hasChildren:
+                  value:
+                    error:
+                      code: BASE_HAS_CHILDREN
+                      message: "Cannot delete project 'base': child projects exist."
+                hasTokens:
+                  value:
+                    error:
+                      code: PROJECT_HAS_TOKENS
+                      message: "Cannot delete project 'proj-acme': project still has tokens."
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: listTokens
+      summary: List resolved tokens for a project
+      description: |
+        Returns the resolved token list for the project — base tokens merged with the project's
+        overrides. Optionally filtered by `category`. REQ-018.
+      tags: [Tokens]
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TokenCategory"
+          description: Filter results to one token category.
+          example: color
+      responses:
+        "200":
+          description: Resolved token list (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResolvedToken"
+              examples:
+                colorTokens:
+                  summary: Two resolved color tokens
+                  value:
+                    - key: color.primary.500
+                      category: color
+                      value: "#0066CC"
+                      source: base
+                      isSemantic: false
+                    - key: color.text.primary
+                      category: color
+                      value: "#0052A3"
+                      source: override
+                      isSemantic: true
+                      semanticRef: color.primary.500
+        "400":
+          description: Invalid category value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                invalidCategory:
+                  value:
+                    error:
+                      code: INVALID_CATEGORY
+                      message: "'bogus' is not a valid token category."
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/tokens/{key}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TokenKey"
+
+    put:
+      operationId: upsertTokenOverride
+      summary: Create or update a token override (OCC)
+      description: |
+        Creates or updates a token override for the given project and key. Uses optimistic
+        concurrency control: the client must supply `If-Match: <current-version>` acquired
+        from a prior GET. A mismatch returns 409. REQ-028.
+
+        On first creation (no existing override) omit `If-Match` or send `If-Match: "0"`.
+      tags: [Tokens]
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Current version of the token override as a quoted version string.
+            Required when updating an existing override; omit or send `"0"` for initial creation.
+          example: '"3"'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertTokenInput"
+            examples:
+              updateColor:
+                summary: Override a color token
+                value:
+                  value: "#0052A3"
+                  version: 3
+      responses:
+        "200":
+          description: Token override saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                circularRef:
+                  value:
+                    error:
+                      code: CIRCULAR_REFERENCE
+                      message: "Semantic reference creates a circular chain."
+                chainTooDeep:
+                  value:
+                    error:
+                      code: REFERENCE_CHAIN_TOO_DEEP
+                      message: "Semantic reference chain exceeds the maximum allowed depth."
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+        "409":
+          description: Conflict — concurrent write or stale version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                conflict:
+                  value:
+                    error:
+                      code: CONFLICT
+                      message: "Token 'color.primary.500' was modified concurrently. Re-fetch and retry."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/tokens/{key}/override:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TokenKey"
+
+    delete:
+      operationId: deleteTokenOverride
+      summary: Remove a token override (revert to base)
+      description: |
+        Deletes the project-level override for the given token key, reverting to the base value.
+        REQ-006.
+      tags: [Tokens]
+      responses:
+        "204":
+          description: Override deleted
+        "400":
+          description: Token is referenced by a semantic token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                referenced:
+                  value:
+                    error:
+                      code: TOKEN_REFERENCED_BY_SEMANTIC
+                      message: "Token 'color.primary.500' is referenced by one or more semantic tokens."
+        "404":
+          description: Project or token override not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                notFound:
+                  value:
+                    error:
+                      code: TOKEN_NOT_FOUND
+                      message: "No override for key 'color.primary.500' in project 'proj-acme'."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/components:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: listComponents
+      summary: List resolved component specs for a project
+      description: Returns all resolved component specs (base merged with project overrides). REQ-019.
+      tags: [Components]
+      responses:
+        "200":
+          description: List of resolved component specs (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResolvedComponentSpec"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/components/{componentId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ComponentId"
+
+    get:
+      operationId: getComponent
+      summary: Get a single resolved component spec
+      description: Returns one resolved component spec by ID. REQ-019.
+      tags: [Components]
+      responses:
+        "200":
+          description: Resolved component spec
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolvedComponentSpec"
+        "404":
+          $ref: "#/components/responses/ComponentNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/projects/{projectId}/components/{componentId}/override:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ComponentId"
+
+    put:
+      operationId: upsertComponentOverride
+      summary: Create or update a component override
+      description: |
+        Creates or updates the project-level override for a component spec.
+        Only the fields listed in `ComponentOverrideInput` may be overridden;
+        unknown fields return 400 INVALID_OVERRIDE_FIELD. REQ-027.
+      tags: [Components]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentOverrideInput"
+      responses:
+        "200":
+          description: Resolved component spec after override applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolvedComponentSpec"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                invalidField:
+                  value:
+                    error:
+                      code: INVALID_OVERRIDE_FIELD
+                      message: "'id' is not an overridable field."
+        "404":
+          $ref: "#/components/responses/ComponentNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      operationId: deleteComponentOverride
+      summary: Remove a component override (revert to base)
+      description: Deletes the project-level component override, reverting to the base spec. REQ-027.
+      tags: [Components]
+      responses:
+        "204":
+          description: Override deleted
+        "404":
+          $ref: "#/components/responses/ComponentNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/validate/color-pair:
+    post:
+      operationId: validateColorPair
+      summary: Validate a foreground/background color pair (WCAG contrast)
+      description: |
+        Checks a fg/bg pair against WCAG 2.2 AA contrast ratios for the given context.
+        Thresholds: normal text 4.5:1 · large text 3:1 · UI components 3:1. REQ-026.
+      tags: [Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColorPairInput"
+            examples:
+              failingPair:
+                summary: Pair that fails AA normal text
+                value:
+                  fg: "#767676"
+                  bg: "#FFFFFF"
+                  context: normal
+              passingPair:
+                summary: Pair that passes AA normal text
+                value:
+                  fg: "#1A1A1A"
+                  bg: "#FFFFFF"
+                  context: normal
+      responses:
+        "200":
+          description: Contrast check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContrastResult"
+              examples:
+                fail:
+                  summary: Failing result
+                  value:
+                    passes: false
+                    ratio: 4.48
+                    requiredRatio: 4.5
+                    criterion: "WCAG 2.2 SC 1.4.3"
+                    fg: "#767676"
+                    bg: "#FFFFFF"
+                pass:
+                  summary: Passing result
+                  value:
+                    passes: true
+                    ratio: 16.1
+                    requiredRatio: 4.5
+                    criterion: "WCAG 2.2 SC 1.4.3"
+                    fg: "#1A1A1A"
+                    bg: "#FFFFFF"
+        "400":
+          description: Invalid color format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                badColor:
+                  value:
+                    error:
+                      code: INVALID_COLOR_FORMAT
+                      message: "'not-a-color' is not a valid CSS color."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/proposals:
+    get:
+      operationId: listProposals
+      summary: List proposals for a project
+      description: |
+        Returns pending and resolved proposals for the given project. REQ-032.
+        **P3 feature — not active in MVP.**
+      tags: [Proposals]
+      x-phase: "P3"
+      parameters:
+        - name: projectId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proposal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/proposals/audit:
+    get:
+      operationId: listAuditRecords
+      summary: List audit records for proposals
+      description: |
+        Returns the approval/rejection audit trail for a project's proposals. REQ-033.
+        **P3 feature — not active in MVP.**
+      tags: [Proposals]
+      x-phase: "P3"
+      parameters:
+        - name: projectId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/proposals/{proposalId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/ProposalId"
+    put:
+      operationId: approveProposal
+      summary: Approve a token-override proposal
+      description: |
+        Human approves an AI-submitted proposal; the override is applied. REQ-033.
+        **P3 feature — not active in MVP.**
+      tags: [Proposals]
+      x-phase: "P3"
+      responses:
+        "200":
+          description: Proposal approved and override applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "404":
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/proposals/{proposalId}/reject:
+    parameters:
+      - $ref: "#/components/parameters/ProposalId"
+    put:
+      operationId: rejectProposal
+      summary: Reject a token-override proposal
+      description: |
+        Human rejects an AI-submitted proposal with an optional note. REQ-033.
+        **P3 feature — not active in MVP.**
+      tags: [Proposals]
+      x-phase: "P3"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectProposalInput"
+      responses:
+        "200":
+          description: Proposal rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "404":
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /mcp:
+    post:
+      operationId: mcpToolCall
+      summary: MCP JSON-RPC tool call
+      description: |
+        Standard MCP JSON-RPC 2.0 envelope. The `method` field selects the tool; `params`
+        carries tool arguments. AI assistants call this endpoint directly.
+
+        Supported tools (P1 unless noted):
+        - `list_projects` — no params (REQ-016)
+        - `get_design_system` — `{ projectId }` (REQ-017)
+        - `get_tokens` — `{ projectId, category? }` (REQ-018)
+        - `get_component_spec` — `{ projectId, componentId }` (REQ-019)
+        - `validate_color_pair` — `{ fg, bg, context }` (REQ-020)
+        - `validate_token_pair` — `{ projectId, fgKey, bgKey, context }` (REQ-020)
+        - `validate_snippet` — `{ content, contentType?: "html"|"jsx" }` (REQ-020)
+        - `search_guidelines` — `{ query? }` (REQ-030) **P2**
+        - `propose_token_override` — `{ projectId, key, value, rationale }` (REQ-032) **P3**
+
+        `propose_token_override` additionally requires the `X-Agent-ID` header.
+        Per JSON-RPC 2.0, tool errors return HTTP 200 with an `error` field.
+      tags: [MCP]
+      parameters:
+        - name: X-Agent-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Identifies the AI agent submitting the request. Required only for
+            `propose_token_override` (P3). Ignored for other tools.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/McpRequest"
+            examples:
+              listProjects:
+                summary: list_projects tool call
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: list_projects
+                  params: {}
+              getTokens:
+                summary: get_tokens filtered by color
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: get_tokens
+                  params:
+                    projectId: proj-acme
+                    category: color
+              validateColorPair:
+                summary: validate_color_pair tool call
+                value:
+                  jsonrpc: "2.0"
+                  id: 3
+                  method: validate_color_pair
+                  params:
+                    fg: "#767676"
+                    bg: "#FFFFFF"
+                    context: normal
+              validateTokenPair:
+                summary: validate_token_pair by token keys
+                value:
+                  jsonrpc: "2.0"
+                  id: 4
+                  method: validate_token_pair
+                  params:
+                    projectId: proj-acme
+                    fgKey: color.text.primary
+                    bgKey: color.surface.default
+                    context: normal
+      responses:
+        "200":
+          description: |
+            MCP JSON-RPC response. Contains `result` on success or `error` on failure —
+            never both. HTTP 200 is returned for both; only auth failures return a non-200.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpResponse"
+              examples:
+                listProjectsResult:
+                  summary: Successful list_projects result
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    result:
+                      projects:
+                        - id: base
+                          name: "Base Design System"
+                          parentId: null
+                          createdAt: "2026-06-01T00:00:00.000Z"
+                        - id: proj-acme
+                          name: "Acme Web App"
+                          parentId: base
+                          createdAt: "2026-06-10T09:30:00.000Z"
+                validateColorPairResult:
+                  summary: validate_color_pair result (fail)
+                  value:
+                    jsonrpc: "2.0"
+                    id: 3
+                    result:
+                      passes: false
+                      ratio: 4.48
+                      requiredRatio: 4.5
+                      criterion: "WCAG 2.2 SC 1.4.3"
+                      fg: "#767676"
+                      bg: "#FFFFFF"
+                mcpError:
+                  summary: JSON-RPC error (invalid params)
+                  value:
+                    jsonrpc: "2.0"
+                    id: 2
+                    error:
+                      code: -32602
+                      message: "Invalid params: projectId is required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        All endpoints require `Authorization: Bearer <MCP_SECRET>`.
+        Auth errors always return HTTP 401 with one of:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — token wrong or empty after "Bearer "
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer (e.g. Basic, Digest)
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Unique project identifier (e.g. `base`, `proj-acme`).
+      example: proj-acme
+
+    TokenKey:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Token key in dot-notation (e.g. `color.primary.500`).
+      example: color.primary.500
+
+    ComponentId:
+      name: componentId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Component identifier (e.g. `btn-primary`).
+      example: btn-primary
+
+    ProposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID of the proposal.
+      example: "123e4567-e89b-12d3-a456-426614174000"
+
+  schemas:
+
+    Project:
+      type: object
+      required: [id, name, parentId, createdAt]
+      properties:
+        id:
+          type: string
+          description: Unique project ID.
+          example: proj-acme
+        name:
+          type: string
+          description: Human-readable project name.
+          example: "Acme Web App"
+        parentId:
+          type: ["string", "null"]
+          description: Parent project ID, or null for top-level (base) projects.
+          example: base
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: ISO 8601 creation timestamp (UTC).
+          example: "2026-06-13T10:00:00.000Z"
+
+    CreateProjectInput:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Desired project ID (must be unique).
+          example: proj-acme
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable project name.
+          example: "Acme Web App"
+        parentId:
+          type: string
+          description: |
+            ID of the parent project this project should inherit from.
+            Omit to create a top-level (base) project.
+          example: base
+
+    TokenCategory:
+      type: string
+      enum: [color, spacing, typography, radius, shadow, breakpoint]
+      description: One of the six supported token categories.
+      example: color
+
+    Token:
+      type: object
+      required: [id, projectId, key, category, value, isSemantic, version]
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: Internal token ID (opaque).
+        projectId:
+          type: string
+          description: Project this token override belongs to.
+          example: proj-acme
+        key:
+          type: string
+          description: Token key in dot-notation.
+          example: color.primary.500
+        category:
+          $ref: "#/components/schemas/TokenCategory"
+        value:
+          type: string
+          description: Raw token value (hex color, px value, font-family string, etc.).
+          example: "#0052A3"
+        isSemantic:
+          type: boolean
+          description: True if this token references another token (via semanticRef).
+        semanticRef:
+          type: string
+          description: The key of the referenced primitive token (only present when isSemantic is true).
+          example: color.primary.500
+        version:
+          type: integer
+          minimum: 0
+          description: Monotonically increasing version for optimistic concurrency control.
+          example: 3
+
+    ResolvedToken:
+      type: object
+      required: [key, category, value, source, isSemantic]
+      properties:
+        key:
+          type: string
+          example: color.primary.500
+        category:
+          $ref: "#/components/schemas/TokenCategory"
+        value:
+          type: string
+          example: "#0052A3"
+        source:
+          type: string
+          enum: [base, override]
+          description: Whether this value comes from the base project or a project-level override.
+          example: override
+        isSemantic:
+          type: boolean
+        semanticRef:
+          type: string
+          description: Referenced primitive token key (only when isSemantic is true).
+
+    UpsertTokenInput:
+      type: object
+      required: [value, version]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          description: New token value.
+          example: "#0052A3"
+        version:
+          type: integer
+          minimum: 0
+          description: |
+            Expected current version for OCC. Use 0 when creating a new override for the
+            first time (or omit If-Match header entirely).
+          example: 3
+
+    ComponentProp:
+      type: object
+      required: [name, type, required]
+      properties:
+        name:
+          type: string
+          example: label
+        type:
+          type: string
+          example: string
+        required:
+          type: boolean
+        default:
+          type: string
+          description: Default value for the prop as a string literal.
+        description:
+          type: string
+          example: "Visible button label text."
+
+    ComponentSpec:
+      type: object
+      required: [id, projectId, name, props, variants, states, usageRules, accessibilityNotes, version]
+      properties:
+        id:
+          type: string
+          example: btn-primary
+        projectId:
+          type: string
+          example: base
+        name:
+          type: string
+          example: "Primary Button"
+        description:
+          type: string
+          example: "The main call-to-action button."
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentProp"
+        variants:
+          type: array
+          items:
+            type: string
+          example: [default, destructive, outline]
+        states:
+          type: array
+          items:
+            type: string
+          example: [default, hover, focus-visible, disabled]
+        usageRules:
+          type: array
+          items:
+            type: string
+          example: ["Use for the primary action on a page.", "Limit to one per view."]
+        accessibilityNotes:
+          type: array
+          items:
+            type: string
+          example:
+            - "Must have a visible focus indicator (WCAG 2.4.7)."
+            - "Label must be descriptive (WCAG 4.1.2)."
+        version:
+          type: integer
+          minimum: 0
+          example: 2
+
+    SourceMap:
+      type: object
+      description: Maps each overridable field name to its source ("base" or "override").
+      additionalProperties:
+        type: string
+        enum: [base, override]
+      example:
+        name: base
+        description: override
+        usageRules: override
+
+    ResolvedComponentSpec:
+      allOf:
+        - $ref: "#/components/schemas/ComponentSpec"
+        - type: object
+          required: [_sources]
+          properties:
+            _sources:
+              $ref: "#/components/schemas/SourceMap"
+
+    ComponentOverrideInput:
+      type: object
+      description: |
+        Fields that may be overridden at the project level. At least one field must be present.
+        The `id`, `projectId`, and `version` fields are not overridable → INVALID_OVERRIDE_FIELD.
+        Array fields REPLACE (not merge with) the base array entirely.
+      minProperties: 1
+      properties:
+        description:
+          type: string
+        usageRules:
+          type: array
+          items:
+            type: string
+        accessibilityNotes:
+          type: array
+          items:
+            type: string
+        variants:
+          type: array
+          items:
+            type: string
+        states:
+          type: array
+          items:
+            type: string
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentProp"
+
+    ColorContext:
+      type: string
+      enum: [normal, large, ui]
+      description: |
+        WCAG context that determines the required contrast ratio:
+        - `normal` — 4.5:1 (SC 1.4.3 normal text)
+        - `large` — 3:1 (SC 1.4.3 large text: >=18pt or >=14pt bold)
+        - `ui` — 3:1 (SC 1.4.11 non-text contrast: UI components, graphics)
+      example: normal
+
+    ColorPairInput:
+      type: object
+      required: [fg, bg, context]
+      properties:
+        fg:
+          type: string
+          description: Foreground color as a CSS hex string (#RGB or #RRGGBB) or rgb(R,G,B).
+          example: "#767676"
+        bg:
+          type: string
+          description: Background color as a CSS hex string (#RGB or #RRGGBB) or rgb(R,G,B).
+          example: "#FFFFFF"
+        context:
+          $ref: "#/components/schemas/ColorContext"
+
+    ContrastResult:
+      type: object
+      required: [passes, ratio, requiredRatio, criterion, fg, bg]
+      properties:
+        passes:
+          type: boolean
+          description: True if the ratio meets or exceeds the required threshold.
+          example: false
+        ratio:
+          type: number
+          format: float
+          description: Computed contrast ratio (to two decimal places).
+          example: 4.48
+        requiredRatio:
+          type: number
+          format: float
+          description: Minimum ratio required for the given context.
+          example: 4.5
+        criterion:
+          type: string
+          description: The WCAG success criterion that was evaluated.
+          example: "WCAG 2.2 SC 1.4.3"
+        fg:
+          type: string
+          description: Foreground color as provided.
+          example: "#767676"
+        bg:
+          type: string
+          description: Background color as provided.
+          example: "#FFFFFF"
+
+    Violation:
+      type: object
+      required: [criterion, severity, description, remediation]
+      properties:
+        criterion:
+          type: string
+          example: "WCAG 2.2 SC 1.4.3"
+        severity:
+          type: string
+          enum: [error, warning]
+        description:
+          type: string
+          example: "Text/background contrast ratio 3.1:1 fails the 4.5:1 AA threshold."
+        remediation:
+          type: string
+          example: "Increase contrast to at least 4.5:1 or use a larger font (>=18pt)."
+        element:
+          type: string
+          description: Element identifier (tagName#id or tagName) for the offending element.
+          example: "button#submit"
+
+    ConformanceReport:
+      type: object
+      required: [passes, violations, warnings]
+      properties:
+        passes:
+          type: boolean
+          description: True only when there are zero errors (warnings do not block passing).
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+          description: Issues with severity "error" — must be fixed for AA conformance.
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+          description: Issues with severity "warning" — recommended but not blocking.
+
+    Proposal:
+      type: object
+      required: [id, projectId, key, proposedValue, rationale, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        projectId:
+          type: string
+        key:
+          type: string
+          description: Token key being proposed for override.
+          example: color.primary.500
+        proposedValue:
+          type: string
+          example: "#003D8F"
+        rationale:
+          type: string
+          description: AI-provided justification for the change.
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        agentId:
+          type: ["string", "null"]
+          description: Identifier of the AI agent that submitted the proposal (from X-Agent-ID header).
+        rejectionNote:
+          type: ["string", "null"]
+          description: Human-provided rejection reason (only when status is "rejected").
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        decidedAt:
+          type: ["string", "null"]
+          format: date-time
+          readOnly: true
+
+    RejectProposalInput:
+      type: object
+      properties:
+        rejectionNote:
+          type: string
+          description: Optional explanation for the rejection.
+          example: "The proposed color does not meet brand guidelines."
+
+    AuditRecord:
+      type: object
+      required: [proposalId, decision, decidedBy, decidedAt]
+      properties:
+        proposalId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [approved, rejected]
+        decidedBy:
+          type: string
+          description: Human user or agent ID that made the decision.
+        decidedAt:
+          type: string
+          format: date-time
+        rejectionNote:
+          type: ["string", "null"]
+          description: Rejection reason (only for rejected decisions).
+
+    McpRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+          description: Must be exactly "2.0".
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+          description: Client-chosen request identifier echoed in the response.
+          example: 1
+        method:
+          type: string
+          enum:
+            - list_projects
+            - get_design_system
+            - get_tokens
+            - get_component_spec
+            - validate_color_pair
+            - validate_token_pair
+            - validate_snippet
+            - search_guidelines
+            - propose_token_override
+          description: MCP tool name.
+          example: list_projects
+        params:
+          type: object
+          description: |
+            Tool arguments. Schema varies by method:
+            - **list_projects** — no params (empty object or omit)
+            - **get_design_system** — `{ projectId: string }`
+            - **get_tokens** — `{ projectId: string, category?: TokenCategory }`
+            - **get_component_spec** — `{ projectId: string, componentId: string }`
+            - **validate_color_pair** — `{ fg: string, bg: string, context: ColorContext }`
+            - **validate_token_pair** — `{ projectId: string, fgKey: string, bgKey: string, context: ColorContext }`
+            - **validate_snippet** — `{ content: string, contentType?: "html"|"jsx" }`
+            - **search_guidelines** (P2) — `{ query?: string }`
+            - **propose_token_override** (P3) — `{ projectId: string, key: string, value: string, rationale: string }` + X-Agent-ID header
+          additionalProperties: true
+          default: {}
+
+    McpResult:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        result:
+          description: Tool-specific result payload (varies by method).
+          additionalProperties: true
+
+    McpError:
+      type: object
+      required: [jsonrpc, id, error]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+              description: |
+                JSON-RPC 2.0 error code. Standard codes:
+                  -32700 Parse error
+                  -32600 Invalid Request
+                  -32601 Method not found
+                  -32602 Invalid params
+                  -32603 Internal error
+            message:
+              type: string
+
+    McpResponse:
+      description: Per JSON-RPC 2.0, a response contains either `result` or `error`, never both.
+      oneOf:
+        - $ref: "#/components/schemas/McpResult"
+        - $ref: "#/components/schemas/McpError"
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable error code. Stable across versions.
+
+            Auth codes: MISSING_AUTH_HEADER, INVALID_TOKEN, INVALID_AUTH_SCHEME
+
+            Registry codes: PROJECT_NOT_FOUND, DUPLICATE_PROJECT_ID, BASE_HAS_CHILDREN,
+              MAX_INHERITANCE_DEPTH, PROJECT_HAS_TOKENS
+
+            Token codes: INVALID_CATEGORY, DUPLICATE_TOKEN_KEY, TOKEN_NOT_FOUND,
+              TOKEN_REFERENCED_BY_SEMANTIC, CIRCULAR_REFERENCE, REFERENCE_CHAIN_TOO_DEEP,
+              CONFLICT, TOKEN_NOT_A_COLOR
+
+            Component codes: COMPONENT_NOT_FOUND, DUPLICATE_COMPONENT_ID,
+              INVALID_OVERRIDE_FIELD, CONFLICT
+
+            Validation codes: INVALID_COLOR_FORMAT, INVALID_SNIPPET
+          example: PROJECT_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable description. Use `code` for logic; never parse `message`.
+          example: "Project 'proj-acme' was not found."
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+
+    AuthErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [MISSING_AUTH_HEADER, INVALID_TOKEN, INVALID_AUTH_SCHEME]
+            message:
+              type: string
+      example:
+        error:
+          code: MISSING_AUTH_HEADER
+          message: "Authorization header is required."
+
+  responses:
+    Unauthorized:
+      description: |
+        Authentication failed. Possible codes:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — wrong or empty token
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: 'Bearer realm="mpds-mcp"'
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthErrorEnvelope"
+          examples:
+            missingHeader:
+              value:
+                error:
+                  code: MISSING_AUTH_HEADER
+                  message: "Authorization header is required."
+            invalidToken:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: "The provided bearer token is invalid."
+            invalidScheme:
+              value:
+                error:
+                  code: INVALID_AUTH_SCHEME
+                  message: "Only the Bearer authentication scheme is accepted."
+
+    ProjectNotFound:
+      description: The specified project does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: PROJECT_NOT_FOUND
+              message: "Project 'proj-acme' was not found."
+
+    ComponentNotFound:
+      description: The specified component does not exist in this project.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: COMPONENT_NOT_FOUND
+              message: "Component 'btn-primary' was not found in project 'proj-acme'."
+
+tags:
+  - name: Projects
+    description: Project registry — create and manage projects with optional inheritance.
+  - name: Tokens
+    description: Design tokens — read resolved tokens and manage project-level overrides.
+  - name: Components
+    description: Component specs — read resolved component specs and manage overrides.
+  - name: Validation
+    description: WCAG 2.2 AA validation — REST endpoint for C-webui inline feedback.
+  - name: Proposals
+    description: |
+      AI-authored token-override proposals gated by human approval.
+      P3 feature — not active in MVP.
+  - name: MCP
+    description: MCP JSON-RPC 2.0 endpoint consumed by AI assistants. All tools behind one POST /mcp.
