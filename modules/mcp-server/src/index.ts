@@ -574,7 +574,7 @@ export async function startServer(opts?: {
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.listen(requestedPort, '127.0.0.1', () => resolve());
+    server.listen(requestedPort, '0.0.0.0', () => resolve());
     server.once('error', reject);
   });
 
