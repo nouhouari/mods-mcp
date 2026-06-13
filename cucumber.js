@@ -11,7 +11,8 @@ const common = {
   requireModule: ['ts-node/register', 'tsconfig-paths/register'],
   // Load order matters: framework hooks first, then support/ (custom hooks,
   // setDefaultTimeout, etc. that register against Cucumber), then step defs.
-  require: [conductorHooks, 'support/**/*.ts', 'step-definitions/**/*.ts'],
+  // Exclude .d.ts declaration files — ts-node cannot execute them.
+  require: [conductorHooks, 'support/**/*.ts', '!support/**/*.d.ts', 'step-definitions/**/*.ts'],
   // 'summary' is essential for diagnosing failures — without it, a failing run
   // prints minimal output and exits non-zero with no clue what broke.
   // 'progress-bar' adds the visual progress indicator for slow runs.
