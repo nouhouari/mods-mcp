@@ -25,6 +25,7 @@ const common = {
     'progress-bar',
     'allure-cucumberjs/reporter',
     'json:reports/cucumber-report.json',
+    'junit:reports/junit-report.xml',
   ],
   formatOptions: { snippetInterface: 'async-await' },
 };

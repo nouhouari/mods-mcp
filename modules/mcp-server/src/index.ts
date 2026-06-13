@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as http from 'http';
 import {
   listProjects,
@@ -83,8 +84,12 @@ function checkAuth(
   if (!token || token.trim() === '') {
     return { ok: false, code: 'INVALID_TOKEN', message: 'Bearer token is empty' };
   }
-  if (secret && token !== secret) {
-    return { ok: false, code: 'INVALID_TOKEN', message: 'Invalid bearer token' };
+  if (secret) {
+    const tokenBuf = Buffer.from(token);
+    const secretBuf = Buffer.from(secret);
+    if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
+      return { ok: false, code: 'INVALID_TOKEN', message: 'Invalid bearer token' };
+    }
   }
   return { ok: true };
 }
@@ -589,12 +594,12 @@ export async function startServer(opts?: {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  if (process.env['MPDS_ENV'] === 'production' && !process.env['MCP_SECRET']) {
-    process.stderr.write('[FATAL] MCP_SECRET must be set in production mode\n');
+  if (!process.env['MCP_SECRET']) {
+    process.stderr.write('[FATAL] MCP_SECRET must be set in all environments\n');
     process.exit(1);
   }
 
-  const authStatus = process.env['MCP_SECRET'] ? 'enabled' : 'disabled';
+  const authStatus = 'enabled';
 
   startServer()
     .then(({ port }) => {

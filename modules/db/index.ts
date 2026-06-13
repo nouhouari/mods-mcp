@@ -2,7 +2,27 @@ import Database from 'better-sqlite3';
 import { readdirSync, readFileSync } from 'fs';
 import * as path from 'path';
 
-const DB_PATH = (): string => process.env.DB_PATH ?? './data/mpds.db';
+import * as os from 'os';
+
+// Compute allowed path prefixes at module load — includes the real tmpdir
+// (on macOS, os.tmpdir() is /var/folders/…, not /tmp/)
+const ALLOWED_DB_PATH_PREFIXES = [
+  '/tmp/',
+  path.resolve('/tmp') + '/',
+  os.tmpdir() + '/',
+  (process.env.HOME ?? '') + '/',
+];
+
+function validateDbPath(raw: string): string {
+  if (raw === ':memory:') return raw;
+  const resolved = path.resolve(raw);
+  if (!ALLOWED_DB_PATH_PREFIXES.some(p => resolved.startsWith(p))) {
+    throw new Error(`DB_PATH not allowed: ${raw}`);
+  }
+  return resolved;
+}
+
+const DB_PATH = (): string => validateDbPath(process.env.DB_PATH ?? ':memory:');
 
 // Module-level singleton
 let _db: Database.Database | undefined;

@@ -1,0 +1,50 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE/mpds-mcp
+
+test:
+  stage: test
+  image: node:22-alpine
+  before_script:
+    - apk add --no-cache python3 make g++
+    - npm ci
+  script:
+    # MCP_SECRET must be set as a masked GitLab CI/CD variable — never hard-code it here
+    - MCP_SECRET=$MCP_SECRET npm test
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit-report.xml
+    paths:
+      - reports/
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
+    - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - docker push $DOCKER_IMAGE:latest
+  only:
+    - main
+    - feat/**
+
+deploy:
+  stage: deploy
+  image: alpine
+  script:
+    - echo "Deploy $DOCKER_IMAGE:$CI_COMMIT_SHA"
+  environment:
+    name: production
+  only:
+    - main
+  when: manual

@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { Before, After } from '@cucumber/cucumber';
 import * as net from 'net';
 import * as http from 'http';
@@ -34,13 +35,14 @@ Before({ tags: '@mcp-server' }, async function (this: MpdsWorld) {
   this.mcpServerProcess = null;
 
   try {
+    const secret = crypto.randomBytes(16).toString('hex');
     const { port, close } = await startServer({
-      secret: 'test-secret',
+      secret,
       port: 0, // OS-assigned
     });
     this.mcpPort = port;
     process.env.MCP_PORT = String(port);
-    process.env.MCP_SECRET = 'test-secret';
+    process.env.MCP_SECRET = secret;
     serverCloseMap.set(this, close);
   } catch {
     this.serverError = true;

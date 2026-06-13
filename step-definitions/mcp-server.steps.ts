@@ -32,6 +32,16 @@ function baseUrl(world: MpdsWorld): string {
   return `http://127.0.0.1:${port}`;
 }
 
+// Resolve 'test-secret' to the actual secret configured in the test hook.
+// Other token values (e.g. 'wrong-token') are used as-is for negative tests.
+function resolveToken(token: string): string {
+  if (token === 'test-secret') {
+    if (!process.env.MCP_SECRET) throw new Error('MCP_SECRET must be set (check mcp-server.hooks.ts)');
+    return process.env.MCP_SECRET;
+  }
+  return token;
+}
+
 // ---------------------------------------------------------------------------
 // Given — server lifecycle (resolved by Before hook; step just asserts hook ran)
 // ---------------------------------------------------------------------------
@@ -90,7 +100,7 @@ When(
     const url = `${baseUrl(this)}${urlPath}`;
     const res = await fetch(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${resolveToken(token)}` },
     });
     this.lastStatus = res.status;
     try {
@@ -108,7 +118,7 @@ When(
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${resolveToken(token)}`,
         'Content-Type': 'application/json',
       },
       body: body.trim(),
