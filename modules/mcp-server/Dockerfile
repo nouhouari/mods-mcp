@@ -12,29 +12,36 @@ RUN npm ci --ignore-scripts
 # Copy entire monorepo so shared modules (db, registry, tokens, etc.) resolve
 COPY modules/ ./modules/
 
-# Build the mcp-server module
+# Build the mcp-server module; prune devDependencies so the runtime stage
+# only sees production deps (typescript, @types/* excluded from final image)
 RUN npm --prefix modules/mcp-server ci --ignore-scripts && \
-    npm --prefix modules/mcp-server run build
+    npm --prefix modules/mcp-server run build && \
+    npm --prefix modules/mcp-server prune --production
 
 # ── runtime stage ──────────────────────────────────────────────────────────────
 FROM node:20.17.0-alpine3.20 AS runtime
 
 WORKDIR /app
 
+# Create non-root user first so --chown can reference it on every COPY (D2)
+RUN addgroup -S mpds && adduser -S mpds -G mpds && \
+    mkdir -p /home/mpds/data && chown mpds:mpds /home/mpds/data
+
 # Copy production deps and compiled output only
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/modules/mcp-server/node_modules ./modules/mcp-server/node_modules
-COPY --from=builder /app/modules/mcp-server/dist ./modules/mcp-server/dist
+COPY --from=builder --chown=mpds:mpds /app/node_modules ./node_modules
+COPY --from=builder --chown=mpds:mpds /app/modules/mcp-server/node_modules ./modules/mcp-server/node_modules
+COPY --from=builder --chown=mpds:mpds /app/modules/mcp-server/dist ./modules/mcp-server/dist
 
 # Copy shared compiled modules that mcp-server imports at runtime
-COPY --from=builder /app/modules/db ./modules/db
-COPY --from=builder /app/modules/registry ./modules/registry
-COPY --from=builder /app/modules/tokens ./modules/tokens
-COPY --from=builder /app/modules/components ./modules/components
-COPY --from=builder /app/modules/validate ./modules/validate
+COPY --from=builder --chown=mpds:mpds /app/modules/db ./modules/db
+COPY --from=builder --chown=mpds:mpds /app/modules/registry ./modules/registry
+COPY --from=builder --chown=mpds:mpds /app/modules/tokens ./modules/tokens
+COPY --from=builder --chown=mpds:mpds /app/modules/components ./modules/components
+COPY --from=builder --chown=mpds:mpds /app/modules/validate ./modules/validate
 
-# Non-root user (C4)
-RUN addgroup -S mpds && adduser -S mpds -G mpds
+# Persistent volume for the SQLite database file (D3)
+VOLUME /home/mpds/data
+
 USER mpds
 
 EXPOSE 3100
@@ -44,5 +51,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3100/health || exit 1
 
 ENV PORT=3100
+ENV DB_PATH=/home/mpds/data/mpds.db
 
 CMD ["node", "modules/mcp-server/dist/index.js"]

@@ -1,6 +1,8 @@
 stages:
   - test
   - build
+  - scan
+  - e2e
   - deploy
 
 variables:
@@ -38,9 +40,57 @@ build:
     - main
     - feat/**
 
+scan:
+  stage: scan
+  image: docker:24
+  services:
+    - docker:24-dind
+  needs: [build]
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker pull $DOCKER_IMAGE:$CI_COMMIT_SHA
+  script:
+    - docker run --rm aquasec/trivy:latest image --exit-code 0 --no-progress $DOCKER_IMAGE:$CI_COMMIT_SHA
+  artifacts:
+    when: always
+    paths:
+      - trivy-report.txt
+  only:
+    - main
+    - feat/**
+
+e2e:
+  stage: e2e
+  image: node:22-alpine
+  services:
+    - name: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      alias: mcp-server
+  needs: [build]
+  variables:
+    # Pull the pre-built image — do not rebuild (D7)
+    DOCKER_IMAGE_TAG: $CI_COMMIT_SHA
+    APP_BASE_URL: http://mcp-server:3100
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" || true
+    - apk add --no-cache python3 make g++
+    - npm ci
+    - npx wait-on $APP_BASE_URL/health --timeout 60000
+  script:
+    - MCP_SECRET=$MCP_SECRET APP_BASE_URL=$APP_BASE_URL npm test
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit-report.xml
+    paths:
+      - reports/
+  only:
+    - main
+    - feat/**
+
 deploy:
   stage: deploy
   image: alpine
+  needs: [scan]
   script:
     - echo "Deploy $DOCKER_IMAGE:$CI_COMMIT_SHA"
   environment:
