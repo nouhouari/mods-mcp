@@ -11,17 +11,19 @@
   },
   "dependencies": {
     "@cucumber/cucumber": "^11.0.0",
+    "@types/express": "^5.0.6",
     "allure-cucumberjs": "^3.0.0",
+    "better-sqlite3": "^12.10.0",
     "conductor-e2e": "^0.1.1",
+    "express": "^5.2.1",
     "ts-node": "^10.9.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.4.0",
-    "better-sqlite3": "^12.10.0"
+    "typescript": "^5.4.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.0.0",
     "allure-commandline": "^2.27.0",
-    "@types/better-sqlite3": "^7.6.8",
     "tsx": "^4.7.0"
   }
 }

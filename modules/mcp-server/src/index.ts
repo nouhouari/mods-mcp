@@ -5,6 +5,27 @@ import { listSpecs, getSpec, ComponentsError } from '../../components/index';
 import { getDb, runMigrations } from '../../db/index';
 
 // ---------------------------------------------------------------------------
+// Lazy DB / migration initialization
+// ---------------------------------------------------------------------------
+// Migrations are NOT run at startServer() time. Instead they run on the first
+// authenticated request so that:
+// 1. In in-process test mode: startServer() runs before world.ts sets DB_PATH,
+//    but by the time the first request arrives, world.ts has set DB_PATH and
+//    already run migrations — ensureMigrations() is then a no-op.
+// 2. In subprocess mode: DB_PATH is set at spawn time; on first request we
+//    open the DB and run any pending migrations before serving data.
+
+let _migrationsApplied = false;
+
+function ensureMigrations(): void {
+  if (_migrationsApplied) return;
+  _migrationsApplied = true;
+  const db = getDb();
+  runMigrations(db);
+  // Do NOT close the DB here — keep the singleton open for subsequent callers.
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -156,6 +177,11 @@ function createHandler(secret: string) {
       return;
     }
 
+    // Ensure DB schema is in place before any data access.
+    // This is a no-op if migrations were already applied (world.ts in-process
+    // mode, or a previous request in subprocess mode).
+    ensureMigrations();
+
     // GET /api/projects — list all projects
     if (method === 'GET' && urlStr === '/api/projects') {
       const projects = await listProjects();
@@ -205,12 +231,10 @@ export async function startServer(opts?: {
   const secret = opts?.secret ?? process.env['MCP_SECRET'] ?? '';
   const requestedPort = opts?.port ?? Number(process.env['MCP_PORT'] ?? 0);
 
-  // Apply migrations against the DB at DB_PATH before accepting any requests.
-  // When spawned by mcp-server.hooks.ts, DB_PATH is already set to the
-  // scenario's temp file by world.ts Before hook (which runs before this one
-  // due to registration order).
-  const db = getDb();
-  runMigrations(db);
+  // Reset so ensureMigrations() re-runs for this new server instance.
+  // Important in in-process test mode where world.ts resetDb() clears the old
+  // DB between scenarios — the new scenario needs migrations applied on its DB.
+  _migrationsApplied = false;
 
   const handler = createHandler(secret);
   const server = http.createServer((req, res) => {
