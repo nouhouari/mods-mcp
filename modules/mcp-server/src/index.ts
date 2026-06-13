@@ -114,12 +114,14 @@ function checkAuth(
   if (!token || token.trim() === '') {
     return { ok: false, code: 'INVALID_TOKEN', message: 'Bearer token is empty' };
   }
-  if (secret) {
-    const tokenBuf = Buffer.from(token);
-    const secretBuf = Buffer.from(secret);
-    if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
-      return { ok: false, code: 'INVALID_TOKEN', message: 'Invalid bearer token' };
-    }
+  // Fail-closed: if secret is empty/missing, deny all requests (misconfiguration).
+  if (!secret || !secret.trim()) {
+    return { ok: false, code: 'SERVER_MISCONFIGURED', message: 'Server authentication is not configured' };
+  }
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(secret);
+  if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
+    return { ok: false, code: 'INVALID_TOKEN', message: 'Invalid bearer token' };
   }
   return { ok: true };
 }

@@ -19,7 +19,14 @@ const ALLOWED_DB_PATH_PREFIXES = [
 function validateDbPath(raw: string): string {
   if (raw === ':memory:') return raw;
   const resolved = path.resolve(raw);
-  if (!ALLOWED_DB_PATH_PREFIXES.some(p => resolved.startsWith(p))) {
+  // Resolve symlinks before allowlist check to prevent symlink escape (e.g. ~/mpds.db -> /etc/shadow).
+  let realResolved = resolved;
+  try {
+    realResolved = require('fs').realpathSync(resolved);
+  } catch {
+    // Path doesn't exist yet — fall back to path.resolve result.
+  }
+  if (!ALLOWED_DB_PATH_PREFIXES.some(p => realResolved.startsWith(p))) {
     throw new Error(`DB_PATH not allowed: ${raw}`);
   }
   return resolved;

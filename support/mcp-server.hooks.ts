@@ -44,7 +44,7 @@ Before({ tags: '@mcp-server' }, async function (this: MpdsWorld) {
     this.mcpPort = port;
     this.mcpSecret = secret;
     process.env.MCP_PORT = String(port);
-    process.env.MCP_SECRET = secret;
+    // MCP_SECRET intentionally NOT written to process.env: secret is isolated on this.mcpSecret.
     serverCloseMap.set(this, close);
   } catch {
     this.serverError = true;
@@ -66,5 +66,4 @@ After({ tags: '@mcp-server' }, async function (this: MpdsWorld) {
     serverCloseMap.delete(this);
   }
   delete process.env.MCP_PORT;
-  delete process.env.MCP_SECRET;
 });
