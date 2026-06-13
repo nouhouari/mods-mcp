@@ -8,9 +8,10 @@
     "build": "tsc --outDir dist"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
-    "better-sqlite3": "^12.10.0"
+    "helmet": "^8.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",

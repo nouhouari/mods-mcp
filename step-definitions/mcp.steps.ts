@@ -4,7 +4,7 @@ import { MpdsWorld } from '../support/world';
 import { createToken } from '../modules/tokens/index';
 
 function baseUrl(world: MpdsWorld): string {
-  const port = process.env.MCP_PORT;
+  const port = world.mcpPort ? String(world.mcpPort) : process.env.MCP_PORT;
   if (!port || world.serverError) {
     throw new Error('MCP server did not start');
   }

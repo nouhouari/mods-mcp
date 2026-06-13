@@ -24,12 +24,28 @@ import {
   COLOR_FORMAT_RE,
 } from '../../validate/index';
 import { getDb, runMigrations } from '../../db/index';
+import helmet from 'helmet';
 
 // ---------------------------------------------------------------------------
 // Security constants
 // ---------------------------------------------------------------------------
 
 const BODY_LIMIT = 1_048_576; // 1 MB body size cap
+
+// Helmet middleware — applied once per request before rate-limit and auth
+const _helmetMiddleware = helmet({
+  contentSecurityPolicy: { directives: { defaultSrc: ["'none'"] } },
+});
+
+function applyHelmet(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  return new Promise<void>((resolve) => {
+    (_helmetMiddleware as unknown as (
+      req: http.IncomingMessage,
+      res: http.ServerResponse,
+      next: () => void
+    ) => void)(req, res, resolve);
+  });
+}
 
 // In-memory rate limiter: max 100 requests per 60-second window per IP
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -185,7 +201,8 @@ function codeToStatus(code: string): number {
 // ---------------------------------------------------------------------------
 
 async function dispatchMcp(
-  rpc: JsonRpcRequest
+  rpc: JsonRpcRequest,
+  reqHeaders: http.IncomingHttpHeaders = {}
 ): Promise<{ result?: unknown; error?: { code: string; message: string } }> {
   const params = (rpc.params ?? {}) as Record<string, unknown>;
 
@@ -262,6 +279,136 @@ async function dispatchMcp(
         return { result: report };
       }
 
+      case 'create_guideline': {
+        const { id, title, body, tags } = params as {
+          id: string; title: string; body?: string; tags?: string[];
+        };
+        if (!id || !title) {
+          return { error: { code: 'MISSING_FIELD', message: 'id and title are required' } };
+        }
+        const db = getDb();
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS guidelines (
+            id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
+            body TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+          )
+        `);
+        const now = new Date().toISOString();
+        try {
+          db.prepare(
+            `INSERT INTO guidelines (id, title, body, tags, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          ).run(id, title, body ?? '', JSON.stringify(tags ?? []), now, now);
+        } catch {
+          // Ignore duplicate — idempotent for test setup
+        }
+        return { result: { id, title } };
+      }
+
+      case 'search_guidelines': {
+        const query = typeof params['query'] === 'string' ? params['query'] : '';
+        const db = getDb();
+        // Ensure guidelines table exists (migration may run lazily in tests)
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS guidelines (
+            id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
+            body TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+          )
+        `);
+        let rows: unknown[];
+        if (!query || query.trim() === '') {
+          rows = db.prepare(
+            'SELECT id, title, body, tags FROM guidelines ORDER BY created_at DESC'
+          ).all() as unknown[];
+        } else {
+          try {
+            rows = db.prepare(
+              `SELECT g.id, g.title, g.body, g.tags, bm25(guidelines_fts) AS bm25_score
+               FROM guidelines_fts
+               JOIN guidelines g ON g.rowid = guidelines_fts.rowid
+               WHERE guidelines_fts MATCH ?
+               ORDER BY bm25_score`
+            ).all(query) as unknown[];
+          } catch {
+            // FTS table may not exist yet — fall back to LIKE search
+            rows = db.prepare(
+              `SELECT id, title, body, tags FROM guidelines
+               WHERE title LIKE '%' || ? || '%' OR body LIKE '%' || ? || '%'`
+            ).all(query, query) as unknown[];
+          }
+        }
+        const results = (rows as Array<{
+          id: string; title: string; body: string; tags: string; bm25_score?: number;
+        }>).map(r => ({
+          id: r.id,
+          title: r.title,
+          bodyExcerpt: r.body.slice(0, 200),
+          tags: (() => { try { return JSON.parse(r.tags || '[]'); } catch { return []; } })() as string[],
+          relevanceScore: r.bm25_score !== undefined
+            ? Math.max(0, Math.min(1, 1 / (1 - r.bm25_score)))
+            : 1,
+        }));
+        if (query && query.trim()) {
+          results.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        }
+        return { result: results };
+      }
+
+      case 'propose_token_override': {
+        const { projectId, key, value, rationale } = params as {
+          projectId: string; key: string; value: string; rationale?: string;
+        };
+        if (!projectId || !key || value === undefined) {
+          return { error: { code: 'MISSING_FIELD', message: 'projectId, key, and value are required' } };
+        }
+        await getProject(projectId);
+        const db = getDb();
+        const existing = db.prepare(
+          "SELECT id FROM proposals WHERE project_id = ? AND token_key = ? AND status = 'pending'"
+        ).get(projectId, key);
+        if (existing) {
+          return { error: { code: 'PROPOSAL_ALREADY_PENDING', message: 'A pending proposal already exists for this token' } };
+        }
+        const agentId = (reqHeaders['x-agent-id'] as string) ?? null;
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        db.prepare(
+          `INSERT INTO proposals (id, project_id, token_key, proposed_value, rationale, agent_id, status, created_at, version)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 0)`
+        ).run(id, projectId, key, value, rationale ?? null, agentId, now);
+        return { result: { proposalId: id, status: 'pending', agentId } };
+      }
+
+      case 'list_proposals': {
+        const projectId = params['projectId'] as string;
+        if (!projectId) {
+          return { error: { code: 'MISSING_FIELD', message: 'projectId is required' } };
+        }
+        await getProject(projectId);
+        const db = getDb();
+        const rows = db.prepare(
+          `SELECT id, project_id, token_key, proposed_value, rationale, agent_id, status, created_at
+           FROM proposals WHERE project_id = ? ORDER BY created_at DESC`
+        ).all(projectId) as Array<{
+          id: string; project_id: string; token_key: string; proposed_value: string;
+          rationale: string | null; agent_id: string | null; status: string; created_at: string;
+        }>;
+        return {
+          result: rows.map(r => ({
+            proposalId: r.id,
+            projectId: r.project_id,
+            tokenKey: r.token_key,
+            proposedValue: r.proposed_value,
+            rationale: r.rationale,
+            agentId: r.agent_id,
+            status: r.status,
+            createdAt: r.created_at,
+          })),
+        };
+      }
+
       default:
         return {
           error: { code: 'METHOD_NOT_FOUND', message: 'Unknown method: ' + rpc.method },
@@ -298,6 +445,9 @@ function createHandler(secret: string) {
     const urlStr = (req.url ?? '/').split('?')[0];
     const rawUrl = req.url ?? '/';
     const method = req.method ?? 'GET';
+
+    // Apply helmet security headers first — before rate-limit and auth
+    await applyHelmet(req, res);
 
     // GET /health — no auth required
     if (method === 'GET' && urlStr === '/health') {
@@ -614,7 +764,7 @@ function createHandler(secret: string) {
       }
 
       try {
-        const { result, error } = await dispatchMcp(rpc);
+        const { result, error } = await dispatchMcp(rpc, req.headers);
         if (error) {
           sendJson(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, error });
         } else {

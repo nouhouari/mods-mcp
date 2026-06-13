@@ -24,7 +24,7 @@ declare module '../support/world' {
 // ---------------------------------------------------------------------------
 
 function baseUrl(world: MpdsWorld): string {
-  const port = process.env.MCP_PORT;
+  const port = world.mcpPort ? String(world.mcpPort) : process.env.MCP_PORT;
   if (!port || world.serverError) {
     throw new Error(
       'MCP server did not start (modules/mcp-server/src/index.ts does not exist yet)'
