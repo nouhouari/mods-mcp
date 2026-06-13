@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync, realpathSync } from 'fs';
 import * as path from 'path';
 
 import * as os from 'os';
@@ -8,24 +8,24 @@ import * as os from 'os';
 // (on macOS, os.tmpdir() is /var/folders/…, not /tmp/)
 // HOME must be non-empty before being added: an empty HOME would produce '/'
 // which matches every absolute path and defeats the allowlist.
+function _tryRealpath(p: string): string {
+  try { return realpathSync(p); } catch { return p; }
+}
+
 const _home = process.env.HOME;
 const ALLOWED_DB_PATH_PREFIXES = [
-  '/tmp/',
+  '/tmp/', _tryRealpath('/tmp') + '/',
   path.resolve('/tmp') + '/',
-  os.tmpdir() + '/',
-  ...(_home ? [_home + '/'] : []),
-];
+  os.tmpdir() + '/', _tryRealpath(os.tmpdir()) + '/',
+  ...(_home ? [_home + '/', _tryRealpath(_home) + '/'] : []),
+].filter((v, i, a) => a.indexOf(v) === i);
 
 function validateDbPath(raw: string): string {
   if (raw === ':memory:') return raw;
   const resolved = path.resolve(raw);
-  // Resolve symlinks before allowlist check to prevent symlink escape (e.g. ~/mpds.db -> /etc/shadow).
-  let realResolved = resolved;
-  try {
-    realResolved = require('fs').realpathSync(resolved);
-  } catch {
-    // Path doesn't exist yet — fall back to path.resolve result.
-  }
+  // Resolve symlinks to prevent symlink escape (e.g. ~/mpds.db -> /etc/shadow).
+  // Fall back to path.resolve when the path doesn't exist yet (new DB file).
+  const realResolved = _tryRealpath(resolved);
   if (!ALLOWED_DB_PATH_PREFIXES.some(p => realResolved.startsWith(p))) {
     throw new Error(`DB_PATH not allowed: ${raw}`);
   }
