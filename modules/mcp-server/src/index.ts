@@ -125,10 +125,9 @@ function codeToStatus(code: string): number {
     case 'PROPOSAL_NOT_FOUND':
       return 404;
     case 'CONFLICT':
-      return 409;
     case 'DUPLICATE_PROJECT_ID':
     case 'DUPLICATE_COMPONENT_ID':
-      return 400;
+      return 409;
     default:
       return 400;
   }
