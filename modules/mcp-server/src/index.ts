@@ -379,19 +379,39 @@ function createHandler(secret: string) {
     // PUT /api/projects/:projectId/tokens/:key
     const tokenPutMatch = urlStr.match(/^\/api\/projects\/([^/]+)\/tokens\/([^/]+)$/);
     if (tokenPutMatch && method === 'PUT') {
-      const { setOverride: setTokenOverride } = await import('../../tokens/index');
       const projectId = decodeURIComponent(tokenPutMatch[1]);
       const key = decodeURIComponent(tokenPutMatch[2]);
       const raw = await readBody(req);
-      const body = JSON.parse(raw) as { value: string; version: number };
+      const body = JSON.parse(raw) as { value: string; version?: unknown };
       const ifMatch = req.headers['if-match'];
-      const version = ifMatch ? parseInt(ifMatch.replace(/"/g, ''), 10) : body.version;
+      // H1: validate version before OCC — MISSING_VERSION/INVALID_VERSION before calling storage layer
+      const rawVersion = ifMatch !== undefined ? parseInt((ifMatch as string).replace(/"/g, ''), 10) : body.version;
+      if (rawVersion === undefined || rawVersion === null) {
+        sendError(res, 400, 'MISSING_VERSION', 'version is required in request body');
+        return;
+      }
+      if (typeof rawVersion !== 'number' || isNaN(rawVersion as number)) {
+        sendError(res, 400, 'INVALID_VERSION', 'version must be a number');
+        return;
+      }
+      const version = rawVersion as number;
       try {
-        const token = await setTokenOverride(projectId, key, body.value, version);
+        const { setOverride: setTokenOverride, updateToken: updateTokenFn } = await import('../../tokens/index');
+        // F3: fall back to parent_id — dispatch to setOverride (child) or updateToken (base)
+        const project = await getProject(projectId);
+        const token = project.parentId
+          ? await setTokenOverride(projectId, key, body.value as string, version)
+          : await updateTokenFn(projectId, key, { version, value: body.value as string });
         sendJson(res, 200, token);
       } catch (err) {
-        if (err instanceof TokensError) {
-          sendError(res, codeToStatus(err.code), err.code, err.message);
+        if (err instanceof TokensError || err instanceof RegistryError) {
+          const e = err as { code: string; message: string };
+          if (e.code === 'CONFLICT') {
+            // F5: sanitize CONFLICT — never expose currentVersion or internal state
+            sendError(res, 409, 'CONFLICT', 'Version conflict — reload and retry');
+          } else {
+            sendError(res, codeToStatus(e.code), e.code, e.message);
+          }
           return;
         }
         throw err;

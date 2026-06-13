@@ -131,3 +131,64 @@ Then(
     );
   }
 );
+
+// ---------------------------------------------------------------------------
+// @US-060 step definitions
+// ---------------------------------------------------------------------------
+
+Given(
+  'a token {string} of category {string} with value {string} exists in {string}',
+  async function (this: MpdsWorld, key: string, category: string, value: string, projectId: string) {
+    await createToken({ projectId, key, category, value });
+  }
+);
+
+When(
+  'I PUT {string} with bearer token {string} and body:',
+  async function (this: MpdsWorld, urlPath: string, token: string, body: string) {
+    const url = `${baseUrl(this)}${urlPath}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: body.trim(),
+    });
+    this.lastStatus = res.status;
+    try {
+      this.lastResult = await res.json();
+    } catch {
+      this.lastResult = null;
+    }
+  }
+);
+
+Then(
+  'the response body has error code {string}',
+  function (this: MpdsWorld, expectedCode: string) {
+    const body = this.lastResult as Record<string, unknown>;
+    assert.ok(body !== null && typeof body === 'object', 'Response body is not an object');
+    const errorObj = body['error'] as Record<string, unknown> | undefined;
+    assert.ok(
+      errorObj !== null && typeof errorObj === 'object',
+      `Expected body.error to be an object, got: ${JSON.stringify(body)}`
+    );
+    assert.strictEqual(
+      (errorObj as Record<string, unknown>)['code'],
+      expectedCode,
+      `Expected error.code to be "${expectedCode}", got "${(errorObj as Record<string, unknown>)['code']}"`
+    );
+  }
+);
+
+Then(
+  'the response body does not contain {string}',
+  function (this: MpdsWorld, forbidden: string) {
+    const raw = JSON.stringify(this.lastResult);
+    assert.ok(
+      !raw.includes(forbidden),
+      `Expected response body not to contain "${forbidden}", but found it in: ${raw}`
+    );
+  }
+);

@@ -403,18 +403,32 @@ export async function setOverride(
       if (existing.version !== version) {
         throw new TokensError('CONFLICT', { message: `Version mismatch` });
       }
-      db.prepare(
-        'UPDATE tokens SET value = ?, version = version + 1 WHERE project_id = ? AND key = ? AND version = ?'
-      ).run(value, projectId, key, version);
-    } else {
-      // New override
-      if (version !== 0) {
-        throw new TokensError('CONFLICT', { message: `Expected version 0 for new override, got ${version}` });
+      // F1: differentiate UNIQUE constraint (409) from other DB errors (rethrow as 500)
+      try {
+        db.prepare(
+          'UPDATE tokens SET value = ?, version = version + 1 WHERE project_id = ? AND key = ? AND version = ?'
+        ).run(value, projectId, key, version);
+      } catch (err: any) {
+        const msg = (err as Error).message ?? '';
+        if (msg.includes('UNIQUE constraint failed')) {
+          throw new TokensError('CONFLICT', { message: `Token '${key}' was modified concurrently in project '${projectId}'` });
+        }
+        throw err;
       }
-      db.prepare(
-        `INSERT INTO tokens (project_id, key, category, value, is_semantic, semantic_ref, version)
-         VALUES (?, ?, ?, ?, 0, NULL, 0)`
-      ).run(projectId, key, baseToken.category, value);
+    } else {
+      // F2: INSERT on first set — CONFLICT only on true duplicate key (race), not on version mismatch
+      try {
+        db.prepare(
+          `INSERT INTO tokens (project_id, key, category, value, is_semantic, semantic_ref, version)
+           VALUES (?, ?, ?, ?, 0, NULL, 0)`
+        ).run(projectId, key, baseToken.category, value);
+      } catch (err: any) {
+        const msg = (err as Error).message ?? '';
+        if (msg.includes('UNIQUE constraint failed')) {
+          throw new TokensError('CONFLICT', { message: `Token '${key}' already has an override in project '${projectId}'` });
+        }
+        throw err;
+      }
     }
 
     const row = db.prepare('SELECT * FROM tokens WHERE project_id = ? AND key = ?').get(projectId, key) as any;
