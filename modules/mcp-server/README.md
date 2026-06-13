@@ -29,10 +29,7 @@ npm install
 | Variable      | Default | Required | Purpose |
 |---------------|---------|----------|---------|
 | `MCP_PORT`    | 3100    | No       | HTTP server port |
-| `MCP_SECRET`  | (empty) | No*      | Bearer token for auth; set in production |
-| `MPDS_ENV`    | dev     | No       | Set to `production` to enforce `MCP_SECRET` |
-
-*In production (`MPDS_ENV=production`), `MCP_SECRET` is mandatory.
+| `MCP_SECRET`  | —       | **Yes**  | Bearer token for auth — server exits at startup if unset |
 
 ### Start the Server
 
@@ -49,7 +46,7 @@ npm start
 
 Output will show:
 ```
-MPDS-MCP listening on port 3100 [auth: disabled]
+MPDS-MCP listening on port 3100
 ```
 
 ### Health Check

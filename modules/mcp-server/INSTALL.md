@@ -61,7 +61,7 @@ The server starts on `http://127.0.0.1:3100` by default.
 
 Expected output:
 ```
-MPDS-MCP listening on port 3100 [auth: disabled]
+MPDS-MCP listening on port 3100
 ```
 
 ### Production (compiled)
@@ -93,7 +93,6 @@ Configure behavior by setting environment variables before start. In development
 cat > .env << 'ENVEOF'
 MCP_PORT=3100
 MCP_SECRET=your-bearer-token-here
-MPDS_ENV=development
 ENVEOF
 ```
 
@@ -103,15 +102,14 @@ source .env
 npm run dev
 ```
 
-### Required Variables
+### Environment Variables
 
-| Variable      | Default | Env | Purpose |
-|---------------|---------|-----|---------|
-| `MCP_PORT`    | 3100    | dev | HTTP server port |
-| `MCP_SECRET`  | (empty) | dev | Bearer token for auth (optional in dev, required in prod) |
-| `MPDS_ENV`    | dev     | dev | `development` or `production`; enforces `MCP_SECRET` if prod |
+| Variable      | Default | Required | Purpose |
+|---------------|---------|----------|---------|
+| `MCP_PORT`    | 3100    | No       | HTTP server port |
+| `MCP_SECRET`  | —       | **Yes**  | Bearer token for auth — server exits at startup if unset |
 
-In **production** (`MPDS_ENV=production`), omitting `MCP_SECRET` causes the server to exit with error code 1.
+`MCP_SECRET` is mandatory in all environments — the server exits with error code 1 at startup if it is not set.
 
 ### Example: Production with Bearer Token
 

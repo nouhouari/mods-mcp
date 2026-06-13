@@ -10,7 +10,7 @@ variables:
 
 test:
   stage: test
-  image: node:22-alpine
+  image: node:20-alpine
   variables:
     DB_PATH: ":memory:"
   before_script:
@@ -63,7 +63,7 @@ scan:
 
 e2e:
   stage: e2e
-  image: node:22-alpine
+  image: node:20-alpine
   services:
     - name: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       alias: mcp-server

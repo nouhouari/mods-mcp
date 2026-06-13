@@ -14,3 +14,5 @@ test-results
 features/
 step-definitions/
 support/
+*.test.ts
+**/*.test.ts
