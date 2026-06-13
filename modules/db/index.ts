@@ -1,39 +1,71 @@
 import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import * as path from 'path';
 
 const DB_PATH = (): string => process.env.DB_PATH ?? './data/mpds.db';
 
-/**
- * Return a new Database instance every call.
- * Tests use unique tmp paths per scenario — reading DB_PATH fresh each call
- * ensures each scenario gets its own isolated database.
- */
+// Module-level singleton
+let _db: Database.Database | undefined;
+
 export function getDb(): Database.Database {
-  const db = new Database(DB_PATH());
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
-  return db;
+  // If the singleton was closed externally (by a module's finally block),
+  // clear it so we re-open at the current DB_PATH.
+  if (_db && !_db.open) {
+    _db = undefined;
+  }
+  if (_db) return _db;
+  _db = new Database(DB_PATH());
+  _db.pragma('journal_mode = WAL');
+  _db.pragma('foreign_keys = ON');
+  _db.pragma('busy_timeout = 5000');
+  return _db;
+}
+
+export function resetDb(): void {
+  if (_db) {
+    try { _db.close(); } catch (_) {}
+    _db = undefined;
+  }
 }
 
 export function runMigrations(db: Database.Database): void {
-  // Schema file is at contracts/P1/C-db.schema.sql relative to repo root.
-  // __dirname is modules/db/, so go up two levels to reach repo root.
-  const schemaPath = path.join(__dirname, '..', '..', 'contracts', 'P1', 'C-db.schema.sql');
-  const schemaSql = readFileSync(schemaPath, 'utf8');
+  // 1. Ensure the migrations tracking table exists (not part of migration files)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      version    INTEGER NOT NULL,
+      applied_at TEXT    NOT NULL,
+      PRIMARY KEY (version)
+    )
+  `);
 
-  // Strip out PRAGMA lines and block comment header lines
-  // then use db.exec() to run everything at once.
-  // better-sqlite3 db.exec() handles multi-statement SQL correctly when
-  // the SQL does not contain PRAGMA statements at the top level.
-  //
-  // We must remove PRAGMA lines because better-sqlite3's exec() does not
-  // support PRAGMA inside a multi-statement exec call on some versions.
-  const cleanedSql = schemaSql
-    .split('\n')
-    .filter((line) => !line.trim().toUpperCase().startsWith('PRAGMA'))
-    .join('\n');
+  // 2. Scan modules/db/migrations/ for NNN_*.sql files, sorted numerically
+  const migrationsDir = path.join(__dirname, 'migrations');
+  let files: string[];
+  try {
+    files = readdirSync(migrationsDir)
+      .filter(f => /^\d+_.*\.sql$/.test(f))
+      .sort(); // lexicographic sort works because filenames are zero-padded NNN_
+  } catch (e) {
+    // No migrations directory yet — nothing to apply
+    return;
+  }
 
-  db.exec(cleanedSql);
+  // 3. Apply only unapplied migrations
+  const getApplied = db.prepare('SELECT version FROM migrations WHERE version = ?');
+  const recordApplied = db.prepare(
+    'INSERT INTO migrations (version, applied_at) VALUES (?, ?)'
+  );
+
+  for (const file of files) {
+    // Extract numeric version from filename prefix (e.g. "001" -> 1)
+    const versionStr = file.match(/^(\d+)_/)![1];
+    const version = parseInt(versionStr, 10);
+
+    const already = getApplied.get(version);
+    if (already) continue; // idempotent — skip already-applied
+
+    const sql = readFileSync(path.join(migrationsDir, file), 'utf8');
+    db.exec(sql);
+    recordApplied.run(version, new Date().toISOString());
+  }
 }
