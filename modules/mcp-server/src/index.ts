@@ -832,8 +832,11 @@ export async function startServer(opts?: {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  if (process.env['MPDS_ENV'] === 'production' && !process.env['MCP_SECRET']) {
-    process.stderr.write('[FATAL] MCP_SECRET must be set in production\n');
+  const _mcpSecret = process.env['MCP_SECRET'];
+  if (process.env['MPDS_ENV'] === 'production' && (!_mcpSecret || !_mcpSecret.trim())) {
+    // Fail-closed at startup: reject an empty OR whitespace-only secret in production
+    // (request-time checkAuth also fail-closes; this surfaces misconfiguration immediately).
+    process.stderr.write('[FATAL] MCP_SECRET must be set to a non-empty value in production\n');
     process.exit(1);
   }
 
