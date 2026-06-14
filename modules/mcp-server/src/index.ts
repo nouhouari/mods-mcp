@@ -24,6 +24,7 @@ import {
   COLOR_FORMAT_RE,
 } from '../../validate/index';
 import { getDb, runMigrations } from '../../db/index';
+import { handlePatternRoutes } from '../../patterns/routes';
 import helmet from 'helmet';
 
 // ---------------------------------------------------------------------------
@@ -746,6 +747,14 @@ function createHandler(secret: string) {
     }
 
     // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Patterns
+    // -----------------------------------------------------------------------
+
+    if (await handlePatternRoutes(method, urlStr, req, res)) {
+      return;
+    }
+
     // MCP JSON-RPC 2.0
     // -----------------------------------------------------------------------
 

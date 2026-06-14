@@ -1,0 +1,1414 @@
+# FROZEN — do not edit without re-freezing (run lint + breaking-change detection)
+# Project:  MPDS-MCP (Multi Project Design System MCP Server)
+# Module:   C-patterns — Pattern Management, Composition Rules, Layout Guidelines (Phase 2)
+# Frozen:   2026-06-14
+# Review gates required before any change: code-quality, security (auth surface / public endpoints)
+
+openapi: 3.1.0
+
+info:
+  title: MPDS-MCP — C-patterns API
+  version: 2.0.0
+  description: |
+    HTTP server extension wrapping patterns, composition rules, and layout guidelines.
+
+    Patterns are reusable UI/interaction design patterns documented with:
+    - **Pattern catalog** — list, get, create, update patterns with metadata
+    - **Composition rules** — which patterns can be safely combined
+    - **Layout guidelines** — responsive breakpoint rules, spacing, alignment, grid systems
+    - **Pattern variants** — mobile/tablet/desktop specific implementations
+
+    All patterns are project-scoped (inherit from parent projects like tokens/components).
+
+    Auth: every endpoint requires `Authorization: Bearer <MCP_SECRET>`.
+
+    Error envelope (all non-2xx responses):
+    ```
+    { "error": { "code": "<ERROR_CODE>", "message": "<human-readable>" } }
+    ```
+
+    Phase: P2 — ships after P1 MVP. Endpoints are live in P2 production (no feature flags).
+
+servers:
+  - url: http://localhost:3100
+    description: Local development (default MCP_PORT=3100)
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /api/projects/{projectId}/patterns:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: listPatterns
+      summary: List all patterns in a project
+      description: |
+        Returns the resolved pattern list for the project — base patterns merged with
+        project-level overrides. Optionally filtered by `category` or `tag`.
+        REQ-P2-001 (Pattern catalog).
+      tags: [Patterns]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            $ref: "#/components/schemas/PatternCategory"
+          description: Filter by pattern category (optional).
+          example: layout
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by a single tag (optional). Multiple tags not yet supported.
+          example: responsive
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Pagination limit.
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Pagination offset.
+      responses:
+        "200":
+          description: Array of patterns (may be empty), with pagination metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patterns, total, limit, offset]
+                properties:
+                  patterns:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Pattern"
+                  total:
+                    type: integer
+                    description: Total number of patterns matching filters.
+                    example: 42
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+              examples:
+                twoPatterns:
+                  summary: Two patterns, pagination info
+                  value:
+                    patterns:
+                      - id: card-hero
+                        name: "Hero Card"
+                        category: layout
+                        description: "Full-width card with image, title, and CTA."
+                        tags: [responsive, accessibility]
+                        createdAt: "2026-06-01T00:00:00.000Z"
+                        updatedAt: "2026-06-01T00:00:00.000Z"
+                      - id: btn-group
+                        name: "Button Group"
+                        category: component
+                        description: "Horizontal or vertical button collection with proper spacing."
+                        tags: [spacing, alignment]
+                        createdAt: "2026-06-02T00:00:00.000Z"
+                        updatedAt: "2026-06-02T00:00:00.000Z"
+                    total: 2
+                    limit: 20
+                    offset: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+    post:
+      operationId: createPattern
+      summary: Create a new pattern in a project
+      description: |
+        Creates a new pattern in the project with metadata and optional variants.
+        REQ-P2-001 (Pattern catalog).
+      tags: [Patterns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePatternInput"
+            examples:
+              heroCard:
+                summary: Create a hero card pattern
+                value:
+                  id: card-hero
+                  name: "Hero Card"
+                  category: layout
+                  description: "Full-width card with image, title, CTA button, and optional badge."
+                  tags: [responsive, accessibility, cta]
+                  guidanceUrl: "https://design-docs.acme.com/patterns/hero-card"
+                  variants:
+                    - name: mobile
+                      description: "Stack vertically on small screens."
+                      appliesAt: mobile
+                    - name: desktop
+                      description: "Side-by-side image and text on large screens."
+                      appliesAt: desktop
+      responses:
+        "201":
+          description: Pattern created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pattern"
+              examples:
+                created:
+                  summary: Newly created hero card pattern
+                  value:
+                    id: card-hero
+                    projectId: proj-acme
+                    name: "Hero Card"
+                    category: layout
+                    description: "Full-width card with image, title, CTA button, and optional badge."
+                    tags: [responsive, accessibility, cta]
+                    guidanceUrl: "https://design-docs.acme.com/patterns/hero-card"
+                    variants:
+                      - id: variant-mobile
+                        name: mobile
+                        description: "Stack vertically on small screens."
+                        appliesAt: mobile
+                      - id: variant-desktop
+                        name: desktop
+                        description: "Side-by-side image and text on large screens."
+                        appliesAt: desktop
+                    relatedComponents: []
+                    compositionRules: []
+                    createdAt: "2026-06-13T10:00:00.000Z"
+                    updatedAt: "2026-06-13T10:00:00.000Z"
+        "400":
+          description: Validation error or business rule violation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                duplicateId:
+                  summary: Duplicate pattern ID
+                  value:
+                    error:
+                      code: DUPLICATE_PATTERN_ID
+                      message: "A pattern with id 'card-hero' already exists in project 'proj-acme'."
+                invalidCategory:
+                  summary: Invalid pattern category
+                  value:
+                    error:
+                      code: INVALID_PATTERN_CATEGORY
+                      message: "Category 'unknown' is not a valid PatternCategory."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+  /api/projects/{projectId}/patterns/{patternId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/PatternId"
+
+    get:
+      operationId: getPattern
+      summary: Get a pattern by ID
+      description: |
+        Returns a single pattern with all metadata, variants, composition rules, and
+        related components. REQ-P2-001 (Pattern catalog).
+      tags: [Patterns]
+      responses:
+        "200":
+          description: Pattern found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pattern"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or pattern not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                patternNotFound:
+                  value:
+                    error:
+                      code: PATTERN_NOT_FOUND
+                      message: "Pattern 'card-hero' not found in project 'proj-acme'."
+
+    put:
+      operationId: updatePattern
+      summary: Update a pattern
+      description: |
+        Updates pattern metadata (name, description, tags, guidance URL).
+        Variants and composition rules are managed via separate endpoints.
+        REQ-P2-001 (Pattern catalog).
+      tags: [Patterns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePatternInput"
+            examples:
+              updateDescription:
+                summary: Update pattern description and guidance
+                value:
+                  name: "Hero Card (Updated)"
+                  description: "Full-width hero card with image, text overlay, and CTA — now with badge support."
+                  guidanceUrl: "https://design-docs.acme.com/patterns/hero-card/v2"
+      responses:
+        "200":
+          description: Pattern updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pattern"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PatternNotFound"
+        "409":
+          description: Conflict — e.g. duplicate name/id in conflict state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    delete:
+      operationId: deletePattern
+      summary: Delete a pattern
+      description: |
+        Deletes a pattern. Fails if the pattern is referenced by composition rules
+        or component specs (`PATTERN_IN_USE`). REQ-P2-001 (Pattern catalog).
+      tags: [Patterns]
+      responses:
+        "204":
+          description: Pattern deleted.
+        "400":
+          description: Business rule prevents deletion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                patternInUse:
+                  value:
+                    error:
+                      code: PATTERN_IN_USE
+                      message: "Cannot delete pattern 'card-hero': 3 composition rules reference it."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PatternNotFound"
+
+  /api/projects/{projectId}/patterns/{patternId}/variants:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/PatternId"
+
+    post:
+      operationId: createPatternVariant
+      summary: Add a variant to a pattern
+      description: |
+        Creates a responsive variant of a pattern (e.g. mobile, tablet, desktop).
+        REQ-P2-002 (Pattern variants).
+      tags: [Pattern Variants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePatternVariantInput"
+            examples:
+              tabletVariant:
+                summary: Add tablet variant
+                value:
+                  name: tablet
+                  description: "Optimized layout for tablet (768-1024px)."
+                  appliesAt: tablet
+      responses:
+        "201":
+          description: Variant created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatternVariant"
+              examples:
+                created:
+                  value:
+                    id: variant-tablet
+                    name: tablet
+                    description: "Optimized layout for tablet (768-1024px)."
+                    appliesAt: tablet
+                    createdAt: "2026-06-13T10:15:00.000Z"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PatternNotFound"
+
+  /api/projects/{projectId}/patterns/{patternId}/variants/{variantId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/PatternId"
+      - $ref: "#/components/parameters/VariantId"
+
+    delete:
+      operationId: deletePatternVariant
+      summary: Delete a pattern variant
+      description: Removes a responsive variant from a pattern.
+      tags: [Pattern Variants]
+      responses:
+        "204":
+          description: Variant deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Pattern or variant not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/projects/{projectId}/composition-rules:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: listCompositionRules
+      summary: List composition rules for a project
+      description: |
+        Returns composition rules that document which patterns can/cannot be safely combined.
+        REQ-P2-003 (Composition rules).
+      tags: [Composition Rules]
+      parameters:
+        - name: patternId
+          in: query
+          schema:
+            type: string
+          description: Filter by a pattern ID (optional). Shows rules where this pattern is involved.
+          example: card-hero
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Array of composition rules with pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rules, total, limit, offset]
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompositionRule"
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+              examples:
+                twoRules:
+                  value:
+                    rules:
+                      - id: rule-card-inside-grid
+                        projectId: proj-acme
+                        patternAId: card-hero
+                        patternBId: layout-grid
+                        relation: NESTING_ALLOWED
+                        guidance: "Hero cards can be placed inside grid layouts with appropriate spacing."
+                        createdAt: "2026-06-01T00:00:00.000Z"
+                      - id: rule-btn-colors
+                        projectId: proj-acme
+                        patternAId: btn-group
+                        patternBId: btn-primary
+                        relation: OVERRIDE_CAUTION
+                        guidance: "Button groups should not override individual button colors; use token overrides instead."
+                        createdAt: "2026-06-02T00:00:00.000Z"
+                    total: 2
+                    limit: 20
+                    offset: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+    post:
+      operationId: createCompositionRule
+      summary: Create a composition rule
+      description: |
+        Documents a constraint or permission for combining two patterns.
+        REQ-P2-003 (Composition rules).
+      tags: [Composition Rules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompositionRuleInput"
+            examples:
+              nestingAllowed:
+                summary: Allow nesting of card in grid
+                value:
+                  patternAId: card-hero
+                  patternBId: layout-grid
+                  relation: NESTING_ALLOWED
+                  guidance: "Hero cards can be placed inside grid layouts; ensure adequate spacing per the layout guideline."
+      responses:
+        "201":
+          description: Composition rule created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompositionRule"
+        "400":
+          description: Validation error or business rule violation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                patternNotFound:
+                  value:
+                    error:
+                      code: PATTERN_NOT_FOUND
+                      message: "Pattern 'unknown-pattern' not found in project 'proj-acme'."
+                duplicateRule:
+                  value:
+                    error:
+                      code: DUPLICATE_COMPOSITION_RULE
+                      message: "A composition rule already exists for patterns 'card-hero' and 'layout-grid'."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+  /api/projects/{projectId}/composition-rules/{ruleId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - name: ruleId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Composition rule ID.
+
+    get:
+      operationId: getCompositionRule
+      summary: Get a composition rule by ID
+      tags: [Composition Rules]
+      responses:
+        "200":
+          description: Composition rule found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompositionRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or rule not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    put:
+      operationId: updateCompositionRule
+      summary: Update a composition rule
+      description: Updates the relation type and/or guidance text.
+      tags: [Composition Rules]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompositionRuleInput"
+            examples:
+              updateGuidance:
+                value:
+                  relation: NESTING_ALLOWED
+                  guidance: "Updated: Hero cards can be placed inside grids. Minimum spacing is 16px."
+      responses:
+        "200":
+          description: Rule updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompositionRule"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or rule not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    delete:
+      operationId: deleteCompositionRule
+      summary: Delete a composition rule
+      tags: [Composition Rules]
+      responses:
+        "204":
+          description: Rule deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or rule not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/projects/{projectId}/layout-guidelines:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      operationId: listLayoutGuidelines
+      summary: List layout guidelines for a project
+      description: |
+        Returns responsive breakpoints, spacing scales, alignment/grid rules, and other
+        layout guidance. REQ-P2-004 (Layout guidelines).
+      tags: [Layout Guidelines]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/GuidelineType"
+          description: Filter by guideline type (optional).
+          example: spacing
+      responses:
+        "200":
+          description: Array of layout guidelines.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [guidelines, total]
+                properties:
+                  guidelines:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LayoutGuideline"
+                  total:
+                    type: integer
+              examples:
+                guidelines:
+                  value:
+                    guidelines:
+                      - id: guideline-breakpoints
+                        type: breakpoints
+                        name: "Responsive Breakpoints"
+                        description: "Mobile-first breakpoint scale for responsive design."
+                        data:
+                          mobile: { min: 0, max: 479 }
+                          tablet: { min: 480, max: 1023 }
+                          desktop: { min: 1024, max: null }
+                        createdAt: "2026-06-01T00:00:00.000Z"
+                      - id: guideline-spacing
+                        type: spacing
+                        name: "Spacing Scale"
+                        description: "Standard spacing values in pixels."
+                        data:
+                          xs: 4
+                          sm: 8
+                          md: 16
+                          lg: 24
+                          xl: 32
+                          xxl: 48
+                        createdAt: "2026-06-01T00:00:00.000Z"
+                    total: 2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+    post:
+      operationId: createLayoutGuideline
+      summary: Create a layout guideline
+      description: |
+        Adds a new guideline (breakpoints, spacing, grid, alignment, etc.).
+        REQ-P2-004 (Layout guidelines).
+      tags: [Layout Guidelines]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLayoutGuidelineInput"
+            examples:
+              spacingScale:
+                summary: Create spacing scale
+                value:
+                  type: spacing
+                  name: "Spacing Scale"
+                  description: "Standard spacing values in pixels."
+                  data:
+                    xs: 4
+                    sm: 8
+                    md: 16
+                    lg: 24
+                    xl: 32
+                    xxl: 48
+      responses:
+        "201":
+          description: Guideline created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutGuideline"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProjectNotFound"
+
+  /api/projects/{projectId}/layout-guidelines/{guidelineId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - name: guidelineId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Layout guideline ID.
+
+    get:
+      operationId: getLayoutGuideline
+      summary: Get a layout guideline by ID
+      tags: [Layout Guidelines]
+      responses:
+        "200":
+          description: Guideline found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutGuideline"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or guideline not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    put:
+      operationId: updateLayoutGuideline
+      summary: Update a layout guideline
+      description: Updates name, description, and/or data of the guideline.
+      tags: [Layout Guidelines]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLayoutGuidelineInput"
+            examples:
+              updateSpacing:
+                value:
+                  name: "Spacing Scale (v2)"
+                  description: "Updated spacing scale with new value for xs."
+                  data:
+                    xs: 2
+                    sm: 8
+                    md: 16
+                    lg: 24
+                    xl: 32
+                    xxl: 48
+      responses:
+        "200":
+          description: Guideline updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutGuideline"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or guideline not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    delete:
+      operationId: deleteLayoutGuideline
+      summary: Delete a layout guideline
+      description: |
+        Deletes a guideline. Fails if it is referenced by patterns or composition rules
+        (`GUIDELINE_IN_USE`).
+      tags: [Layout Guidelines]
+      responses:
+        "204":
+          description: Guideline deleted.
+        "400":
+          description: Business rule prevents deletion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                guidelineInUse:
+                  value:
+                    error:
+                      code: GUIDELINE_IN_USE
+                      message: "Cannot delete guideline 'guideline-breakpoints': referenced by 5 patterns."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Project or guideline not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/projects/{projectId}/patterns/{patternId}/validate-usage:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/PatternId"
+
+    post:
+      operationId: validatePatternUsage
+      summary: Validate pattern usage against composition rules
+      description: |
+        Checks if a pattern can be safely combined with other patterns according to
+        composition rules and layout guidelines. Returns warnings and errors.
+        REQ-P2-005 (Pattern validation).
+      tags: [Pattern Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePatternUsageInput"
+            examples:
+              checkComposition:
+                summary: Check if hero card can nest in grid
+                value:
+                  withPatternIds: [layout-grid, btn-group]
+                  breakpoint: desktop
+      responses:
+        "200":
+          description: Validation result with warnings and errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatternValidationResult"
+              examples:
+                hasWarnings:
+                  value:
+                    passes: false
+                    warnings:
+                      - code: COMPOSITION_CAUTION
+                        patternId: btn-group
+                        message: "Button group should not override individual button colors."
+                        remediation: "Use token overrides instead of pattern-level color changes."
+                    errors: []
+                allGood:
+                  value:
+                    passes: true
+                    warnings: []
+                    errors: []
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PatternNotFound"
+
+components:
+
+  schemas:
+
+    PatternCategory:
+      type: string
+      enum: [layout, component, interaction, accessibility, animation, spacing, color, typography]
+      description: |
+        Pattern classification:
+        - `layout` — grid, flexbox, spacing, alignment patterns
+        - `component` — button, card, modal, form patterns
+        - `interaction` — hover, focus, disabled, loading states
+        - `accessibility` — keyboard nav, focus management, ARIA patterns
+        - `animation` — transitions, motion, microinteractions
+        - `spacing` — margin/padding conventions
+        - `color` — color application, contrast rules
+        - `typography` — font hierarchy, line height, letter spacing
+      example: layout
+
+    BreakpointName:
+      type: string
+      enum: [mobile, tablet, desktop, wide]
+      description: Responsive breakpoint identifier.
+      example: mobile
+
+    PatternVariant:
+      type: object
+      required: [id, name, appliesAt, createdAt]
+      properties:
+        id:
+          type: string
+          description: Unique variant identifier (e.g. variant-mobile).
+          example: variant-mobile
+        name:
+          type: string
+          description: Human-readable variant name.
+          example: mobile
+        description:
+          type: string
+          description: Optional description of the variant.
+          example: "Stack vertically on small screens."
+        appliesAt:
+          $ref: "#/components/schemas/BreakpointName"
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreatePatternVariantInput:
+      type: object
+      required: [name, appliesAt]
+      properties:
+        name:
+          type: string
+          description: Variant name (e.g. mobile, tablet, desktop).
+          example: mobile
+        description:
+          type: string
+          description: Optional description.
+        appliesAt:
+          $ref: "#/components/schemas/BreakpointName"
+
+    Pattern:
+      type: object
+      required: [id, projectId, name, category, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: Unique pattern identifier within the project.
+          example: card-hero
+        projectId:
+          type: string
+          description: Project this pattern belongs to.
+          example: proj-acme
+        name:
+          type: string
+          description: Human-readable name.
+          example: "Hero Card"
+        category:
+          $ref: "#/components/schemas/PatternCategory"
+        description:
+          type: string
+          description: Detailed description of the pattern.
+          example: "Full-width card with image, title, and CTA button."
+        tags:
+          type: array
+          items:
+            type: string
+          description: Semantic tags for filtering and discovery.
+          example: [responsive, accessibility, cta]
+        guidanceUrl:
+          type: string
+          format: uri
+          description: Optional link to extended documentation.
+          example: "https://design-docs.acme.com/patterns/hero-card"
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternVariant"
+          description: Responsive variants (mobile, tablet, desktop, etc.).
+        relatedComponents:
+          type: array
+          items:
+            type: string
+          description: Component IDs that implement this pattern.
+          example: [btn-primary, card-base]
+        compositionRules:
+          type: array
+          items:
+            type: string
+          description: Composition rule IDs referencing this pattern.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreatePatternInput:
+      type: object
+      required: [id, name, category]
+      properties:
+        id:
+          type: string
+          description: Unique pattern ID (kebab-case, alphanumeric + hyphens).
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          example: card-hero
+        name:
+          type: string
+          description: Human-readable name.
+          example: "Hero Card"
+        category:
+          $ref: "#/components/schemas/PatternCategory"
+        description:
+          type: string
+          description: Optional detailed description.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Optional semantic tags.
+        guidanceUrl:
+          type: string
+          format: uri
+          description: Optional link to extended documentation.
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreatePatternVariantInput"
+          description: Optional responsive variants to create immediately.
+
+    UpdatePatternInput:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated pattern name.
+        description:
+          type: string
+          description: Updated description.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Updated tags.
+        guidanceUrl:
+          type: string
+          format: uri
+          description: Updated guidance URL.
+
+    CompositionRelation:
+      type: string
+      enum: [NESTING_ALLOWED, NESTING_FORBIDDEN, OVERRIDE_CAUTION, SIBLING_ONLY, EXCLUSIVE]
+      description: |
+        Relation type between two patterns:
+        - `NESTING_ALLOWED` — patternA can be safely nested inside patternB
+        - `NESTING_FORBIDDEN` — patternA must not nest inside patternB
+        - `OVERRIDE_CAUTION` — patterns can coexist but with caveats (documented in guidance)
+        - `SIBLING_ONLY` — patterns can be siblings but not nested
+        - `EXCLUSIVE` — patterns cannot appear together in the same view/component
+      example: NESTING_ALLOWED
+
+    CompositionRule:
+      type: object
+      required: [id, projectId, patternAId, patternBId, relation, createdAt]
+      properties:
+        id:
+          type: string
+          description: Unique rule identifier.
+          example: rule-card-inside-grid
+        projectId:
+          type: string
+        patternAId:
+          type: string
+          description: First pattern ID in the composition.
+          example: card-hero
+        patternBId:
+          type: string
+          description: Second pattern ID in the composition.
+          example: layout-grid
+        relation:
+          $ref: "#/components/schemas/CompositionRelation"
+        guidance:
+          type: string
+          description: Human-readable guidance on the relation.
+          example: "Hero cards can be placed inside grid layouts; ensure adequate spacing."
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreateCompositionRuleInput:
+      type: object
+      required: [patternAId, patternBId, relation]
+      properties:
+        patternAId:
+          type: string
+          description: First pattern ID.
+          example: card-hero
+        patternBId:
+          type: string
+          description: Second pattern ID.
+          example: layout-grid
+        relation:
+          $ref: "#/components/schemas/CompositionRelation"
+        guidance:
+          type: string
+          description: Optional guidance text.
+
+    UpdateCompositionRuleInput:
+      type: object
+      properties:
+        relation:
+          $ref: "#/components/schemas/CompositionRelation"
+        guidance:
+          type: string
+          description: Updated guidance text.
+
+    GuidelineType:
+      type: string
+      enum: [breakpoints, spacing, grid, alignment, typography, animation]
+      description: |
+        Type of layout guideline:
+        - `breakpoints` — responsive breakpoint definitions
+        - `spacing` — spacing scale (margin/padding values)
+        - `grid` — grid system parameters
+        - `alignment` — alignment and justification rules
+        - `typography` — font, line-height, letter-spacing rules
+        - `animation` — animation/transition timing and easing
+      example: spacing
+
+    LayoutGuideline:
+      type: object
+      required: [id, projectId, type, name, data, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: Unique guideline identifier.
+          example: guideline-spacing
+        projectId:
+          type: string
+        type:
+          $ref: "#/components/schemas/GuidelineType"
+        name:
+          type: string
+          description: Human-readable name.
+          example: "Spacing Scale"
+        description:
+          type: string
+          description: Optional description.
+          example: "Standard spacing values in pixels."
+        data:
+          type: object
+          description: |
+            Flexible JSON object containing guideline data. Structure varies by type:
+            - **breakpoints**: `{ "mobile": { "min": 0, "max": 479 }, ... }`
+            - **spacing**: `{ "xs": 4, "sm": 8, ... }`
+            - **grid**: `{ "columns": 12, "gap": 16, ... }`
+            - **alignment**: `{ "horizontal": ["start", "center", "end"], ... }`
+            - **typography**: `{ "size": {...}, "weight": {...}, ... }`
+            - **animation**: `{ "duration": {...}, "easing": {...}, ... }`
+          additionalProperties: true
+          example:
+            xs: 4
+            sm: 8
+            md: 16
+            lg: 24
+            xl: 32
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreateLayoutGuidelineInput:
+      type: object
+      required: [type, name, data]
+      properties:
+        type:
+          $ref: "#/components/schemas/GuidelineType"
+        name:
+          type: string
+          example: "Spacing Scale"
+        description:
+          type: string
+          description: Optional description.
+        data:
+          type: object
+          description: Guideline-specific data structure.
+          additionalProperties: true
+
+    UpdateLayoutGuidelineInput:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated name.
+        description:
+          type: string
+          description: Updated description.
+        data:
+          type: object
+          description: Updated data.
+          additionalProperties: true
+
+    PatternValidationIssue:
+      type: object
+      required: [code, patternId, message]
+      properties:
+        code:
+          type: string
+          enum: [COMPOSITION_CAUTION, COMPOSITION_FORBIDDEN, BREAKPOINT_MISMATCH, GUIDELINE_CONFLICT]
+          description: Issue classification.
+          example: COMPOSITION_CAUTION
+        patternId:
+          type: string
+          description: Pattern involved in the issue.
+          example: btn-group
+        message:
+          type: string
+          description: Human-readable issue description.
+        remediation:
+          type: string
+          description: Optional suggested fix.
+
+    PatternValidationResult:
+      type: object
+      required: [passes, warnings, errors]
+      properties:
+        passes:
+          type: boolean
+          description: True only when there are no errors (warnings do not block passing).
+          example: true
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternValidationIssue"
+          description: Issues with severity "warning".
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternValidationIssue"
+          description: Issues with severity "error" — must be resolved.
+
+    ValidatePatternUsageInput:
+      type: object
+      required: [withPatternIds]
+      properties:
+        withPatternIds:
+          type: array
+          items:
+            type: string
+          description: List of pattern IDs to check composition with.
+          example: [layout-grid, btn-group]
+        breakpoint:
+          $ref: "#/components/schemas/BreakpointName"
+          description: Optional breakpoint context for variant-aware validation.
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable error code. Stable across versions.
+
+            Pattern codes: PATTERN_NOT_FOUND, DUPLICATE_PATTERN_ID, PATTERN_IN_USE,
+              INVALID_PATTERN_CATEGORY, INVALID_PATTERN_ID, PATTERN_REFERENCED
+
+            Composition rule codes: DUPLICATE_COMPOSITION_RULE, COMPOSITION_RULE_NOT_FOUND
+
+            Guideline codes: GUIDELINE_NOT_FOUND, GUIDELINE_IN_USE, INVALID_GUIDELINE_TYPE
+
+            Validation codes: INVALID_BREAKPOINT, PATTERN_NOT_FOUND, INVALID_COMPOSITION
+          example: PATTERN_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable description. Use `code` for logic; never parse `message`.
+          example: "Pattern 'card-hero' was not found in project 'proj-acme'."
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+
+    AuthErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [MISSING_AUTH_HEADER, INVALID_TOKEN, INVALID_AUTH_SCHEME]
+            message:
+              type: string
+      example:
+        error:
+          code: MISSING_AUTH_HEADER
+          message: "Authorization header is required."
+
+  parameters:
+
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Project identifier.
+      example: proj-acme
+
+    PatternId:
+      name: patternId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Pattern identifier.
+      example: card-hero
+
+    VariantId:
+      name: variantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Pattern variant identifier.
+      example: variant-mobile
+
+  responses:
+
+    Unauthorized:
+      description: |
+        Authentication failed. Possible codes:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — wrong or empty token
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: 'Bearer realm="mpds-mcp"'
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthErrorEnvelope"
+          examples:
+            missingHeader:
+              value:
+                error:
+                  code: MISSING_AUTH_HEADER
+                  message: "Authorization header is required."
+            invalidToken:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: "The provided bearer token is invalid."
+
+    ProjectNotFound:
+      description: The specified project does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            1:
+              summary: Project not found
+              value:
+                error:
+                  code: PROJECT_NOT_FOUND
+                  message: "Project 'proj-acme' was not found."
+
+    PatternNotFound:
+      description: The specified pattern does not exist in this project.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: PATTERN_NOT_FOUND
+              message: "Pattern 'card-hero' was not found in project 'proj-acme'."
+
+    ValidationError:
+      description: Request validation failed or business rule violated.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalidCategory:
+              value:
+                error:
+                  code: INVALID_PATTERN_CATEGORY
+                  message: "Category 'unknown' is not a valid PatternCategory."
+            duplicateId:
+              value:
+                error:
+                  code: DUPLICATE_PATTERN_ID
+                  message: "A pattern with id 'card-hero' already exists."
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Bearer <MCP_SECRET>
+      description: |
+        Bearer token authentication. Include `Authorization: Bearer <token>` header
+        with every request. Token must match `MCP_SECRET` environment variable.
+
+tags:
+  - name: Patterns
+    description: |
+      Pattern catalog — create, read, update, delete UI/interaction design patterns.
+      Patterns are project-scoped and support responsive variants.
+  - name: Pattern Variants
+    description: |
+      Responsive variants — define mobile/tablet/desktop-specific implementations
+      of a pattern.
+  - name: Composition Rules
+    description: |
+      Composition constraints and permissions — documents which patterns can be
+      safely combined and how.
+  - name: Layout Guidelines
+    description: |
+      Layout guidance — breakpoints, spacing scales, grid systems, alignment rules,
+      typography and animation conventions.
+  - name: Pattern Validation
+    description: |
+      Pattern usage validation — check if patterns can be combined according to
+      composition rules and layout guidelines.

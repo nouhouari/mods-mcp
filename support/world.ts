@@ -28,6 +28,12 @@ export class MpdsWorld {
   lastResult: unknown = null;
   lastError: unknown = null;
   secondResult: unknown = null;
+  lastStatus: number = 0;
+  lastResponse: any = null;
+  lastPatternId: string | null = null;
+  lastRuleId: string | null = null;
+  lastGuidelineId: string | null = null;
+  patternMap: Map<string, string> | null = null;
 
   constructor() {}
 }
