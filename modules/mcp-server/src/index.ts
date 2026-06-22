@@ -55,6 +55,7 @@ import {
   ValidateError,
   COLOR_FORMAT_RE,
 } from '../../validate/index';
+import { generateShowcase, PreviewError } from '../../preview';
 import { getDb, runMigrations } from '../../db/index';
 import { handlePatternRoutes } from '../../patterns/routes';
 import helmet from 'helmet';
@@ -612,6 +613,15 @@ async function dispatchMcp(
         return { result: { success: true } };
       }
 
+      case 'generate_showcase': {
+        const { projectId, title } = (rpc.params ?? {}) as { projectId?: string; title?: string };
+        if (!projectId || typeof projectId !== 'string') {
+          return { error: { code: 'MISSING_FIELD', message: '"projectId" is required' } };
+        }
+        const result = await generateShowcase(projectId, title);
+        return { result };
+      }
+
       default:
         return {
           error: { code: 'METHOD_NOT_FOUND', message: 'Unknown method: ' + rpc.method },
@@ -623,7 +633,8 @@ async function dispatchMcp(
       err instanceof TokensError ||
       err instanceof ComponentsError ||
       err instanceof ValidateError ||
-      err instanceof PatternsError
+      err instanceof PatternsError ||
+      err instanceof PreviewError
     ) {
       return {
         error: {
@@ -1011,6 +1022,9 @@ export async function startServer(opts?: {
 
   // Reset migration flag so ensureMigrations() re-runs for this server instance.
   _migrationsApplied = false;
+
+  // Reset rate-limit store so each test scenario starts with a clean counter.
+  _rateLimitStore.clear();
 
   const handler = createHandler(secret);
   const server = http.createServer((req, res) => {

@@ -1,0 +1,438 @@
+# FROZEN — do not edit without re-freezing (run lint + breaking-change detection)
+# Project:  MPDS-MCP (Multi Project Design System MCP Server)
+# Module:   C-mcp-showcase — generate_showcase MCP tool (Phase 4)
+# Frozen:   2026-06-22
+# Review gates required before any change: code-quality, security (auth surface / public endpoints)
+
+openapi: 3.1.0
+
+info:
+  title: MPDS-MCP Showcase Tool
+  version: 4.0.0
+  description: |
+    One new MCP JSON-RPC 2.0 read tool added to the existing POST /mcp endpoint.
+
+    **Method:** `generate_showcase`
+
+    Given a `projectId`, the tool:
+    1. Resolves all tokens via `resolveTokens(projectId)`.
+    2. Lists all component specs via `listSpecs(projectId)`.
+    3. Lists all patterns via `listPatterns(projectId, {})`.
+    4. Renders a self-contained HTML page (no CDN, no external deps) that
+       presents the design system: color palette swatches, spacing/typography/
+       other token tables, component spec cards, and a pattern catalog.
+    5. Returns the HTML string plus summary counts for the agent to log.
+
+    **Why MCP (not REST).** The tool lives on POST /mcp — consistent with every
+    other P1/P3 read/write tool. The agent that calls it can pipe the result
+    directly to a file or preview iframe without an additional HTTP round-trip.
+
+    **Auth.** Every call requires `Authorization: Bearer <MCP_SECRET>`.
+    Auth failures return HTTP 401 (not JSON-RPC 200+error).
+
+    **Error envelope** (application-level, HTTP 200 with `error` field):
+    ```
+    { "jsonrpc": "2.0", "id": <id>, "error": { "code": <int>, "message": "<string>",
+      "data": { "code": "<DOMAIN_CODE>", "message": "<string>" } } }
+    ```
+
+    **Frozen date:** 2026-06-22.
+
+servers:
+  - url: http://localhost:3100
+    description: Local development (default MCP_PORT=3100)
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /mcp:
+    post:
+      operationId: mcpShowcaseToolCall
+      summary: MCP JSON-RPC 2.0 showcase tool dispatch
+      description: |
+        Dispatches the `generate_showcase` tool. The `method` field must be
+        `"generate_showcase"`; all other method names are handled by the existing
+        P1/P3 dispatcher and are not re-documented here.
+
+        **Tool:** `generate_showcase`
+
+        Reads the resolved state of a design system project and emits a
+        single self-contained HTML page summarising it. The page has no
+        external dependencies (no CDN, no Google Fonts, no remote scripts);
+        it opens correctly when saved as a local file or served from any
+        HTTP origin.
+
+        **Token → CSS custom property mapping**
+
+        Every resolved token is surfaced in a `<style>` block as a CSS
+        custom property on `:root`. The mapping rule is:
+
+        - Replace every `.` in the token key with `-`.
+        - Prepend `--token-`.
+
+        Examples:
+        ```
+        color.primary.500      →  --token-color-primary-500
+        spacing.md             →  --token-spacing-md
+        typography.size.body   →  --token-typography-size-body
+        ```
+
+        **Sections rendered (in order)**
+
+        1. **Color palette** — responsive swatch grid; each swatch is a
+           filled rectangle showing the resolved color value, the token key,
+           the hex/value string, and a badge indicating `base` or `override`
+           source. Semantic tokens carry an additional badge showing the
+           resolved primitive key.
+        2. **Token tables** — one collapsible `<details>` section per
+           non-color category (spacing, typography, radius, shadow,
+           breakpoint); each row: key, value, source badge, semantic ref.
+        3. **Component gallery** — one spec card per component; each card
+           shows: name, description, props table (name / type / required /
+           default / description), variants list, states list, usage rules,
+           and accessibility notes. This is a documentation render, not a
+           live component render (the server has no browser).
+        4. **Pattern catalog** — one card per pattern; shows: name,
+           category, description, tags, guidance URL if present, and
+           created/updated timestamps.
+
+        **Empty-section behavior:** a section is hidden (not rendered) when
+        its count is zero.
+
+        **No side effects.** `generate_showcase` is a pure read tool; it
+        does not write to the database.
+
+        Per JSON-RPC 2.0, tool-level errors return HTTP 200 with an `error`
+        field; only auth failures produce a non-200 HTTP status.
+      tags: [MCP Showcase Tool]
+      x-phase: "P4"
+      parameters:
+        - name: X-Agent-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional identifier of the AI agent submitting the call. Used for
+            audit logging and rate-limit attribution. Accepted but not required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/McpShowcaseRequest"
+            examples:
+
+              generate_showcase_minimal:
+                summary: generate_showcase — minimal (projectId only)
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: generate_showcase
+                  params:
+                    projectId: my-ds
+
+              generate_showcase_with_title:
+                summary: generate_showcase — with custom page title
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: generate_showcase
+                  params:
+                    projectId: my-ds
+                    title: "Acme Design System"
+
+      responses:
+        "200":
+          description: |
+            JSON-RPC 2.0 response. Contains `result` on success or `error` on
+            failure — never both. HTTP 200 is returned for both outcomes; only
+            auth failures produce a non-200 status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpShowcaseResponse"
+              examples:
+
+                generate_showcase_result:
+                  summary: generate_showcase success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    result:
+                      html: "<!DOCTYPE html><html lang=\"en\"><!-- self-contained showcase page --></html>"
+                      tokenCount: 42
+                      componentCount: 8
+                      patternCount: 5
+
+                generate_showcase_result_with_title:
+                  summary: generate_showcase success — custom title
+                  value:
+                    jsonrpc: "2.0"
+                    id: 2
+                    result:
+                      html: "<!DOCTYPE html><html lang=\"en\"><!-- Acme Design System showcase --></html>"
+                      tokenCount: 67
+                      componentCount: 12
+                      patternCount: 9
+
+                error_project_not_found:
+                  summary: PROJECT_NOT_FOUND domain error
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    error:
+                      code: -32602
+                      message: "Invalid params"
+                      data:
+                        code: PROJECT_NOT_FOUND
+                        message: "Project 'my-ds' was not found."
+
+                error_invalid_params:
+                  summary: Missing required param (projectId)
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    error:
+                      code: -32602
+                      message: "Invalid params: projectId is required"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        All endpoints require `Authorization: Bearer <MCP_SECRET>`.
+        Auth errors always return HTTP 401 with one of:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — token wrong or empty after "Bearer "
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer (e.g. Basic, Digest)
+
+  schemas:
+
+    # ── JSON-RPC envelope ──────────────────────────────────────────────────────────
+
+    McpShowcaseRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+          description: Must be exactly "2.0".
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+          description: Client-chosen request identifier echoed in the response.
+          example: 1
+        method:
+          type: string
+          enum:
+            - generate_showcase
+          description: Must be "generate_showcase".
+          example: generate_showcase
+        params:
+          $ref: "#/components/schemas/GenerateShowcaseParams"
+
+    GenerateShowcaseParams:
+      type: object
+      required: [projectId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          description: |
+            ID of the design system project to render. Must match an existing
+            project in the registry. Returns PROJECT_NOT_FOUND if absent.
+          example: my-ds
+        title:
+          type: string
+          minLength: 1
+          description: |
+            Optional custom `<title>` and visible `<h1>` for the generated page.
+            When omitted, defaults to `"{project.name} Design System"` where
+            `project.name` is the name stored in the registry for `projectId`.
+          example: "Acme Design System"
+
+    GenerateShowcaseResult:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        result:
+          $ref: "#/components/schemas/ShowcasePayload"
+
+    ShowcasePayload:
+      type: object
+      required: [html, tokenCount, componentCount, patternCount]
+      description: |
+        Result of `generate_showcase`. The `html` field is a complete, valid
+        HTML5 document. All CSS is inlined in a `<style>` block; all content
+        is embedded as HTML text — no script tags, no external resources.
+      properties:
+        html:
+          type: string
+          minLength: 1
+          description: |
+            Self-contained HTML5 document string. Guaranteed properties:
+            - Valid `<!DOCTYPE html>` opener.
+            - `<html lang="en">` root element.
+            - `<meta charset="utf-8">` and `<meta name="viewport" ...>`.
+            - All resolved tokens emitted as CSS custom properties on `:root`
+              (key mapping: dots → hyphens, prefixed `--token-`).
+            - No external stylesheets, scripts, fonts, or image URLs.
+            - Renders correctly when saved to disk and opened with `file://`.
+          example: "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Acme Design System</title></head><body><!-- showcase content --></body></html>"
+        tokenCount:
+          type: integer
+          minimum: 0
+          description: Total number of resolved tokens included in the page.
+          example: 42
+        componentCount:
+          type: integer
+          minimum: 0
+          description: Total number of component specs included in the page.
+          example: 8
+        patternCount:
+          type: integer
+          minimum: 0
+          description: Total number of patterns included in the page.
+          example: 5
+
+    McpShowcaseErrorData:
+      type: object
+      required: [code, message]
+      description: |
+        Domain error detail carried in the JSON-RPC `error.data` field.
+        Use `code` for programmatic logic; never parse `message`.
+
+        Codes specific to generate_showcase:
+
+        | Code                | JSON-RPC code | Trigger                                  |
+        |---------------------|---------------|------------------------------------------|
+        | PROJECT_NOT_FOUND   | -32602        | `projectId` does not exist in registry   |
+
+        All P1/P3 auth codes (MISSING_AUTH_HEADER, INVALID_TOKEN,
+        INVALID_AUTH_SCHEME) remain valid and are returned at HTTP 401, not
+        inside the JSON-RPC envelope.
+      properties:
+        code:
+          type: string
+          enum:
+            - PROJECT_NOT_FOUND
+          description: Machine-readable domain error code. Stable across versions.
+          example: PROJECT_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message. Do not parse this field.
+          example: "Project 'my-ds' was not found."
+
+    McpShowcaseError:
+      type: object
+      required: [jsonrpc, id, error]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+              description: |
+                JSON-RPC 2.0 standard error code:
+                  -32700  Parse error
+                  -32600  Invalid Request
+                  -32601  Method not found
+                  -32602  Invalid params (used for PROJECT_NOT_FOUND and missing projectId)
+                  -32603  Internal error (unexpected server failure)
+              example: -32602
+            message:
+              type: string
+              description: Short JSON-RPC error summary.
+              example: "Invalid params"
+            data:
+              $ref: "#/components/schemas/McpShowcaseErrorData"
+              description: |
+                Optional domain error detail. Present when a domain code applies
+                (PROJECT_NOT_FOUND). Absent for pure protocol errors (missing
+                jsonrpc field, parse error, etc.).
+
+    McpShowcaseResponse:
+      description: |
+        Per JSON-RPC 2.0, a response contains either `result` or `error`, never both.
+      oneOf:
+        - $ref: "#/components/schemas/GenerateShowcaseResult"
+        - $ref: "#/components/schemas/McpShowcaseError"
+
+    AuthErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [MISSING_AUTH_HEADER, INVALID_TOKEN, INVALID_AUTH_SCHEME]
+            message:
+              type: string
+      example:
+        error:
+          code: MISSING_AUTH_HEADER
+          message: "Authorization header is required."
+
+  responses:
+    Unauthorized:
+      description: |
+        Authentication failed. Possible codes:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — wrong or empty token
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: 'Bearer realm="mpds-mcp"'
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthErrorEnvelope"
+          examples:
+            missingHeader:
+              value:
+                error:
+                  code: MISSING_AUTH_HEADER
+                  message: "Authorization header is required."
+            invalidToken:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: "The provided bearer token is invalid."
+
+tags:
+  - name: MCP Showcase Tool
+    description: |
+      P4 read tool — one JSON-RPC method that generates a self-contained HTML
+      design system showcase page from the resolved state of a project.

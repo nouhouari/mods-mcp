@@ -1,0 +1,15 @@
+id: REQ-010
+title: Design System Visual Showcase via MCP
+description: "AI agents can call generate_showcase with a projectId to receive a self-contained HTML page that visually previews all design tokens (color palette with swatches, spacing, typography), component specs, and patterns for that project"
+source: REQ-P4-001
+priority: high
+components: []
+tags:
+  - P4
+  - showcase
+  - MCP
+  - html-generation
+status: active
+phase: P4
+createdAt: 2026-06-22T12:00:00.000Z
+updatedAt: 2026-06-22T12:00:00.000Z

@@ -16,6 +16,16 @@ acceptanceCriteria:
   - id: AC-3
     text: Patterns are scoped to the requesting project and cannot be accessed by
       other projects.
-status: draft
+status: accepted
+coverage: covered
+phase: P2
+testHooks: "Tag BDD scenarios with @US-001; feature: Pattern CRUD Operations (8 scenarios)"
+execution:
+  runId: p2-verify-2026-06-22
+  ranAt: 2026-06-22T03:04:37.787Z
+  status: passed
+  scenarioCount: 8
+  source: cucumber-json
+  feature: "Pattern CRUD Operations"
 createdAt: 2026-06-22T02:54:43.675Z
-updatedAt: 2026-06-22T02:54:43.675Z
+updatedAt: 2026-06-22T12:00:00.000Z

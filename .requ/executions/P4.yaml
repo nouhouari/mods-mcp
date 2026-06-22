@@ -1,0 +1,44 @@
+phase: P4
+runs:
+  - feature: Design System Visual Showcase
+    name: Generate showcase for a project with tokens and components
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010
+  - feature: Design System Visual Showcase
+    name: Generated HTML contains CSS custom property for color token
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010
+  - feature: Design System Visual Showcase
+    name: Generated HTML contains component names
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010
+  - feature: Design System Visual Showcase
+    name: tokenCount and componentCount match registered items
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010
+  - feature: Design System Visual Showcase
+    name: Generate showcase for an empty project returns valid HTML with zero counts
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010
+  - feature: Design System Visual Showcase
+    name: Return error when project does not exist
+    status: pass
+    ranAt: 2026-06-22T12:00:00.000Z
+    runId: p4-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-010

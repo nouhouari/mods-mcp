@@ -1,8 +1,25 @@
 id: P2
 name: P2 — Pattern Library
 order: 1
-status: active
+status: complete
 description: "Phase 2 covering the Pattern Library module: CRUD for patterns,
   variants, composition rules, layout guidelines, and input validation."
+gateClosedAt: 2026-06-22T03:04:37.787Z
+executionRunId: p2-verify-2026-06-22
+requirements:
+  - REQ-001
+  - REQ-002
+  - REQ-003
+  - REQ-004
+  - REQ-005
+stories:
+  - US-001
+  - US-002
+  - US-003
+  - US-004
+  - US-005
+scenariosPassed: 149
+scenariosFailed: 0
+gaps: 0
 createdAt: 2026-06-22T02:54:13.439Z
-updatedAt: 2026-06-22T02:54:13.457Z
+updatedAt: 2026-06-22T12:00:00.000Z
