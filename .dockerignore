@@ -1,6 +1,8 @@
 node_modules
 dist
 .git
+.github
+.claude
 .gitignore
 *.db
 *.db-shm
@@ -11,6 +13,7 @@ dist
 coverage
 .nyc_output
 allure-results
+allure-report
 reports
 test-results
 **/*.spec.ts
@@ -20,3 +23,4 @@ test-results
 README.md
 INSTALL.md
 docs/
+*.bak
