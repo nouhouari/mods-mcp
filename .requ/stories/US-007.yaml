@@ -1,0 +1,32 @@
+id: US-007
+title: Define tokens via MCP
+description: "As an AI design agent, I want to create and manage design tokens via MCP so that I can define the color, typography, and spacing system"
+requirements:
+  - REQ-007
+acceptanceCriteria:
+  - id: AC-1
+    text: "Given a project id, token key, category, and value, when I call create_token, then the token is persisted and returned with its id"
+  - id: AC-2
+    text: "Given a project with tokens, when I call list_tokens with the project id, then all tokens for that project are returned as an array"
+  - id: AC-3
+    text: "Given an existing token key, when I call get_token with project id and key, then the single token record is returned"
+  - id: AC-4
+    text: "Given an existing token, when I call update_token with a new value and current version, then the token value is updated and the version is incremented"
+  - id: AC-5
+    text: "Given a project and a token key, when I call set_token, then the override value is stored and takes precedence during resolution"
+  - id: AC-6
+    text: "Given an existing token, when I call delete_token, then the token is removed and a subsequent get_token returns TOKEN_NOT_FOUND"
+  - id: AC-7
+    text: "Given a non-existent token key, when I call get_token or update_token, then a TOKEN_NOT_FOUND error is returned"
+coverage: covered
+phase: P3
+testHooks: "Tag MCP integration tests with @US-007; cover full CRUD cycle via MCP tool calls; assert TOKEN_NOT_FOUND on missing key"
+execution:
+  runId: p3-verify-2026-06-22
+  ranAt: 2026-06-22T10:00:00.000Z
+  status: passed
+  scenarioCount: 6
+  source: cucumber-json
+  feature: "Token Management via MCP Write Tools"
+createdAt: 2026-06-22T08:00:11.000Z
+updatedAt: 2026-06-22T10:00:00.000Z

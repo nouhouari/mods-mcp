@@ -1,0 +1,26 @@
+id: US-008
+title: Define components via MCP
+description: "As an AI design agent, I want to create and manage component specs via MCP so that I can define the component library"
+requirements:
+  - REQ-008
+acceptanceCriteria:
+  - id: AC-1
+    text: "Given a project id, component id, and name, when I call create_component, then the component spec is persisted and returned"
+  - id: AC-2
+    text: "Given an existing component, when I call update_component with new spec fields and current version, then the component is updated and version is incremented"
+  - id: AC-3
+    text: "Given an existing component, when I call delete_component with the component id, then the component is removed and a subsequent get returns COMPONENT_NOT_FOUND"
+  - id: AC-4
+    text: "Given a non-existent component id, when I call update_component or delete_component, then a COMPONENT_NOT_FOUND error is returned"
+coverage: covered
+phase: P3
+testHooks: "Tag MCP integration tests with @US-008; verify create/update/delete component tool responses; assert COMPONENT_NOT_FOUND on missing id"
+execution:
+  runId: p3-verify-2026-06-22
+  ranAt: 2026-06-22T10:00:00.000Z
+  status: passed
+  scenarioCount: 4
+  source: cucumber-json
+  feature: "Component Management via MCP Write Tools"
+createdAt: 2026-06-22T08:00:12.000Z
+updatedAt: 2026-06-22T10:00:00.000Z

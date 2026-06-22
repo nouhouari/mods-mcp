@@ -1,0 +1,15 @@
+id: REQ-006
+title: Project Management via MCP
+description: AI agents can create, update, and delete design system projects via MCP JSON-RPC tools without making REST calls
+source: REQ-P3-001
+priority: high
+components: []
+tags:
+  - P3
+  - projects
+  - MCP
+  - write-ops
+status: active
+phase: P3
+createdAt: 2026-06-22T08:00:01.000Z
+updatedAt: 2026-06-22T08:00:01.000Z

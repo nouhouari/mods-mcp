@@ -1,0 +1,26 @@
+id: US-009
+title: Build pattern library via MCP
+description: "As an AI design agent, I want to manage patterns, variants, composition rules, and layout guidelines via MCP so I can organise the full pattern library"
+requirements:
+  - REQ-009
+acceptanceCriteria:
+  - id: AC-1
+    text: "Given a project id and pattern fields, when I call create_pattern, then the pattern is created; calling update_pattern updates it; calling delete_pattern removes it"
+  - id: AC-2
+    text: "Given an existing pattern, when I call create_variant with name and appliesAt, then the variant is attached; update_variant updates it; delete_variant removes it"
+  - id: AC-3
+    text: "Given two patterns and a relation type, when I call create_composition_rule, then the rule is stored; calling delete_composition_rule removes it"
+  - id: AC-4
+    text: "Given a project id and guideline fields (type, data), when I call create_layout_guideline, then the guideline is created; update_layout_guideline updates it; delete_layout_guideline removes it"
+coverage: covered
+phase: P3
+testHooks: "Tag MCP integration tests with @US-009; cover all four sub-domains (patterns, variants, composition rules, layout guidelines) via MCP tool calls in a single scenario chain"
+execution:
+  runId: p3-verify-2026-06-22
+  ranAt: 2026-06-22T10:00:00.000Z
+  status: passed
+  scenarioCount: 6
+  source: cucumber-json
+  feature: "Pattern Library Management via MCP Write Tools"
+createdAt: 2026-06-22T08:00:13.000Z
+updatedAt: 2026-06-22T10:00:00.000Z

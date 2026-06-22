@@ -1,0 +1,15 @@
+id: REQ-007
+title: Token Management via MCP
+description: AI agents can create, list, get, update, and delete design tokens (including overrides) via MCP tools
+source: REQ-P3-002
+priority: high
+components: []
+tags:
+  - P3
+  - tokens
+  - MCP
+  - write-ops
+status: active
+phase: P3
+createdAt: 2026-06-22T08:00:02.000Z
+updatedAt: 2026-06-22T08:00:02.000Z

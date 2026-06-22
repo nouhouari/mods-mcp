@@ -1,0 +1,15 @@
+id: REQ-008
+title: Component Management via MCP
+description: AI agents can create, update, and delete component specs via MCP tools
+source: REQ-P3-003
+priority: high
+components: []
+tags:
+  - P3
+  - components
+  - MCP
+  - write-ops
+status: active
+phase: P3
+createdAt: 2026-06-22T08:00:03.000Z
+updatedAt: 2026-06-22T08:00:03.000Z

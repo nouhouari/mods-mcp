@@ -1,0 +1,149 @@
+phase: P3
+runs:
+  - feature: Project Management via MCP Write Tools
+    name: Create a project via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-006
+  - feature: Project Management via MCP Write Tools
+    name: Create a project with a parent project via MCP
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-006
+  - feature: Project Management via MCP Write Tools
+    name: Update a project name via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-006
+  - feature: Project Management via MCP Write Tools
+    name: Delete a project via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-006
+  - feature: Project Management via MCP Write Tools
+    name: Creating a project with a duplicate id returns an error with DUPLICATE code
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-006
+  - feature: Token Management via MCP Write Tools
+    name: Create a token via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Token Management via MCP Write Tools
+    name: List tokens for a project via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Token Management via MCP Write Tools
+    name: Get a single token via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Token Management via MCP Write Tools
+    name: Update a token value via MCP using version from get_token
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Token Management via MCP Write Tools
+    name: Delete a token via MCP using version from get_token
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Token Management via MCP Write Tools
+    name: Getting a non-existent token returns TOKEN_NOT_FOUND error
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-007
+  - feature: Component Management via MCP Write Tools
+    name: Create a component via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-008
+  - feature: Component Management via MCP Write Tools
+    name: Get a component spec after creating it via MCP
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-008
+  - feature: Component Management via MCP Write Tools
+    name: Update a component description via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-008
+  - feature: Component Management via MCP Write Tools
+    name: Delete a component via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-008
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Create a pattern via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Create a pattern variant via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Create a composition rule via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Create a layout guideline via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Update a pattern description via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009
+  - feature: Pattern Library Management via MCP Write Tools
+    name: Delete a pattern via MCP write tool
+    status: pass
+    ranAt: 2026-06-22T10:00:00.000Z
+    runId: p3-verify-2026-06-22
+    source: cucumber-json
+    storyId: US-009

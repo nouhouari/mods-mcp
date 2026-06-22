@@ -1,0 +1,1679 @@
+# FROZEN — do not edit without re-freezing (run lint + breaking-change detection)
+# Project:  MPDS-MCP (Multi Project Design System MCP Server)
+# Module:   C-mcp-write — MCP write tools for AI agent design-system authoring (Phase 3)
+# Frozen:   2026-06-22
+# Review gates required before any change: code-quality, security (auth surface / public endpoints)
+
+openapi: 3.1.0
+
+info:
+  title: MPDS-MCP Write Tools
+  version: 3.0.0
+  description: |
+    MCP JSON-RPC 2.0 write tools that let AI agents build an entire design system through
+    natural language. All 23 methods are dispatched through the existing POST /mcp endpoint
+    introduced in P1.
+
+    **Paradigm note.** JSON-RPC 2.0 is a single-path protocol; every call is POST /mcp.
+    OpenAPI cannot cleanly express per-method request/response shapes via path-level
+    discriminators, so each method is documented as a named example on the shared
+    `McpWriteRequest` body. Implementers should treat the `method` field as the discriminator
+    and validate `params` against the per-method schema defined in `components/schemas`.
+
+    **Auth.** Every call requires `Authorization: Bearer <MCP_SECRET>`.
+    Auth failures return HTTP 401 (not JSON-RPC 200+error).
+
+    **Error envelope** (application-level, HTTP 200 with `error` field):
+    ```
+    { "jsonrpc": "2.0", "id": <id>, "error": { "code": <int>, "message": "<string>" } }
+    ```
+    Standard JSON-RPC codes used: -32602 (invalid params), -32603 (internal error).
+    Domain error codes are carried in `error.data.code` as stable string tokens (e.g.
+    `PROJECT_NOT_FOUND`, `VERSION_MISMATCH`). See `McpErrorData` schema.
+
+    **Optimistic concurrency (OCC).** `update_token` and `update_component` require callers
+    to supply the current `version` integer obtained from a prior `get_token` /
+    `get_component_spec` call. A stale version returns `VERSION_MISMATCH`. Likewise
+    `set_token` and `delete_token` require the current `version`.
+
+    **Frozen date:** 2026-06-22.
+
+servers:
+  - url: http://localhost:3100
+    description: Local development (default MCP_PORT=3100)
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /mcp:
+    post:
+      operationId: mcpWriteToolCall
+      summary: MCP JSON-RPC 2.0 write tool dispatch
+      description: |
+        Dispatches one of the 23 P3 write tools. The `method` field in the request body
+        selects the tool; `params` carries the tool arguments.
+
+        **New methods (P3):**
+
+        Projects:
+        - `create_project` — create a new project (optionally inheriting a parent)
+        - `update_project` — rename a project
+        - `delete_project` — remove a project
+
+        Tokens:
+        - `list_tokens` — list resolved tokens for a project (with optional category filter)
+        - `get_token` — fetch a single token (use result.version for OCC)
+        - `create_token` — add a primitive or semantic token
+        - `update_token` — update value/semanticRef (requires current version)
+        - `set_token` — create/replace project-level token override (requires version)
+        - `delete_token` — remove a token entirely (requires version)
+        - `delete_token_override` — revert a project-level override to base value
+
+        Components:
+        - `create_component` — register a component spec
+        - `update_component` — update component metadata (requires current version)
+        - `delete_component` — remove a component spec
+
+        Patterns:
+        - `create_pattern` — add a pattern to the catalog
+        - `update_pattern` — update pattern metadata
+        - `delete_pattern` — remove a pattern
+        - `create_variant` — add a responsive variant to a pattern
+        - `update_variant` — update variant metadata
+        - `delete_variant` — remove a variant
+        - `create_composition_rule` — document a composition constraint between two patterns
+        - `delete_composition_rule` — remove a composition rule
+        - `create_layout_guideline` — add a layout guideline (breakpoints, spacing, etc.)
+        - `update_layout_guideline` — update a layout guideline
+        - `delete_layout_guideline` — remove a layout guideline
+
+        Per JSON-RPC 2.0, tool-level errors return HTTP 200 with an `error` field;
+        only auth failures return a non-200 HTTP status.
+      tags: [MCP Write Tools]
+      x-phase: "P3"
+      parameters:
+        - name: X-Agent-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional identifier of the AI agent submitting the call. Used for audit logging
+            and rate-limit attribution. No write method requires this header but all accept it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/McpWriteRequest"
+            examples:
+
+              # ── Projects ─────────────────────────────────────────────────────────
+              create_project:
+                summary: create_project — create a child project
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: create_project
+                  params:
+                    id: proj-acme
+                    name: "Acme Web App"
+                    parentId: base
+
+              update_project:
+                summary: update_project — rename a project
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: update_project
+                  params:
+                    projectId: proj-acme
+                    name: "Acme Web App (Redesign)"
+
+              delete_project:
+                summary: delete_project — remove a project
+                value:
+                  jsonrpc: "2.0"
+                  id: 3
+                  method: delete_project
+                  params:
+                    projectId: proj-acme
+
+              # ── Tokens ───────────────────────────────────────────────────────────
+              list_tokens:
+                summary: list_tokens — list resolved tokens filtered by category
+                value:
+                  jsonrpc: "2.0"
+                  id: 4
+                  method: list_tokens
+                  params:
+                    projectId: proj-acme
+                    category: color
+
+              get_token:
+                summary: get_token — fetch a single token (use version for OCC)
+                value:
+                  jsonrpc: "2.0"
+                  id: 5
+                  method: get_token
+                  params:
+                    projectId: proj-acme
+                    key: color.primary.500
+
+              create_token:
+                summary: create_token — add a primitive color token
+                value:
+                  jsonrpc: "2.0"
+                  id: 6
+                  method: create_token
+                  params:
+                    projectId: base
+                    key: color.primary.500
+                    category: color
+                    value: "#0066CC"
+                    isSemantic: false
+
+              update_token:
+                summary: update_token — change token value (OCC, requires version)
+                value:
+                  jsonrpc: "2.0"
+                  id: 7
+                  method: update_token
+                  params:
+                    projectId: base
+                    key: color.primary.500
+                    version: 2
+                    value: "#0052A3"
+
+              set_token:
+                summary: set_token — create/replace project-level token override
+                value:
+                  jsonrpc: "2.0"
+                  id: 8
+                  method: set_token
+                  params:
+                    projectId: proj-acme
+                    key: color.primary.500
+                    value: "#003D8F"
+                    version: 2
+
+              delete_token:
+                summary: delete_token — remove a token entirely
+                value:
+                  jsonrpc: "2.0"
+                  id: 9
+                  method: delete_token
+                  params:
+                    projectId: base
+                    key: color.deprecated.300
+                    version: 1
+
+              delete_token_override:
+                summary: delete_token_override — revert override to base value
+                value:
+                  jsonrpc: "2.0"
+                  id: 10
+                  method: delete_token_override
+                  params:
+                    projectId: proj-acme
+                    key: color.primary.500
+
+              # ── Components ───────────────────────────────────────────────────────
+              create_component:
+                summary: create_component — register a component spec
+                value:
+                  jsonrpc: "2.0"
+                  id: 11
+                  method: create_component
+                  params:
+                    projectId: base
+                    id: btn-primary
+                    name: "Primary Button"
+                    description: "The main call-to-action button."
+                    props:
+                      - name: label
+                        type: string
+                        required: true
+                        description: "Visible button label text."
+                      - name: disabled
+                        type: boolean
+                        required: false
+                        default: "false"
+                    variants: [default, destructive, outline]
+                    states: [default, hover, focus-visible, disabled]
+                    usageRules:
+                      - "Use for the primary action on a page."
+                      - "Limit to one per view."
+                    accessibilityNotes:
+                      - "Must have a visible focus indicator (WCAG 2.4.7)."
+
+              update_component:
+                summary: update_component — update metadata (OCC, requires version)
+                value:
+                  jsonrpc: "2.0"
+                  id: 12
+                  method: update_component
+                  params:
+                    projectId: base
+                    componentId: btn-primary
+                    version: 1
+                    description: "The main CTA button — updated for dark-mode compliance."
+                    accessibilityNotes:
+                      - "Must have a visible focus indicator (WCAG 2.4.7)."
+                      - "Label must be descriptive (WCAG 4.1.2)."
+
+              delete_component:
+                summary: delete_component — remove a component spec
+                value:
+                  jsonrpc: "2.0"
+                  id: 13
+                  method: delete_component
+                  params:
+                    projectId: base
+                    componentId: btn-legacy
+
+              # ── Patterns ─────────────────────────────────────────────────────────
+              create_pattern:
+                summary: create_pattern — add a pattern to the catalog
+                value:
+                  jsonrpc: "2.0"
+                  id: 14
+                  method: create_pattern
+                  params:
+                    projectId: proj-acme
+                    id: card-hero
+                    name: "Hero Card"
+                    category: layout
+                    description: "Full-width card with image, title, and CTA button."
+                    tags: [responsive, accessibility]
+                    guidanceUrl: "https://design-docs.acme.com/patterns/hero-card"
+
+              update_pattern:
+                summary: update_pattern — update pattern metadata
+                value:
+                  jsonrpc: "2.0"
+                  id: 15
+                  method: update_pattern
+                  params:
+                    projectId: proj-acme
+                    patternId: card-hero
+                    name: "Hero Card (v2)"
+                    description: "Full-width hero card with badge support."
+                    guidanceUrl: "https://design-docs.acme.com/patterns/hero-card/v2"
+
+              delete_pattern:
+                summary: delete_pattern — remove a pattern
+                value:
+                  jsonrpc: "2.0"
+                  id: 16
+                  method: delete_pattern
+                  params:
+                    projectId: proj-acme
+                    patternId: card-deprecated
+
+              create_variant:
+                summary: create_variant — add a responsive variant
+                value:
+                  jsonrpc: "2.0"
+                  id: 17
+                  method: create_variant
+                  params:
+                    projectId: proj-acme
+                    patternId: card-hero
+                    name: mobile
+                    appliesAt: mobile
+                    description: "Stack vertically on small screens."
+
+              update_variant:
+                summary: update_variant — update variant metadata
+                value:
+                  jsonrpc: "2.0"
+                  id: 18
+                  method: update_variant
+                  params:
+                    projectId: proj-acme
+                    patternId: card-hero
+                    variantId: variant-mobile
+                    description: "Stack vertically; hide badge on screens below 480px."
+
+              delete_variant:
+                summary: delete_variant — remove a variant
+                value:
+                  jsonrpc: "2.0"
+                  id: 19
+                  method: delete_variant
+                  params:
+                    projectId: proj-acme
+                    patternId: card-hero
+                    variantId: variant-wide
+
+              create_composition_rule:
+                summary: create_composition_rule — document a composition constraint
+                value:
+                  jsonrpc: "2.0"
+                  id: 20
+                  method: create_composition_rule
+                  params:
+                    projectId: proj-acme
+                    patternAId: card-hero
+                    patternBId: layout-grid
+                    relation: NESTING_ALLOWED
+                    guidance: "Hero cards can be placed inside grid layouts; ensure 16px spacing."
+
+              delete_composition_rule:
+                summary: delete_composition_rule — remove a composition rule
+                value:
+                  jsonrpc: "2.0"
+                  id: 21
+                  method: delete_composition_rule
+                  params:
+                    projectId: proj-acme
+                    ruleId: rule-card-inside-grid
+
+              create_layout_guideline:
+                summary: create_layout_guideline — add a layout guideline
+                value:
+                  jsonrpc: "2.0"
+                  id: 22
+                  method: create_layout_guideline
+                  params:
+                    projectId: proj-acme
+                    type: spacing
+                    name: "Spacing Scale"
+                    description: "Standard spacing values in pixels."
+                    data:
+                      xs: 4
+                      sm: 8
+                      md: 16
+                      lg: 24
+                      xl: 32
+                      xxl: 48
+
+              update_layout_guideline:
+                summary: update_layout_guideline — update a layout guideline
+                value:
+                  jsonrpc: "2.0"
+                  id: 23
+                  method: update_layout_guideline
+                  params:
+                    projectId: proj-acme
+                    guidelineId: guideline-spacing
+                    name: "Spacing Scale (v2)"
+                    data:
+                      xs: 2
+                      sm: 8
+                      md: 16
+                      lg: 24
+                      xl: 32
+                      xxl: 48
+
+              delete_layout_guideline:
+                summary: delete_layout_guideline — remove a layout guideline
+                value:
+                  jsonrpc: "2.0"
+                  id: 24
+                  method: delete_layout_guideline
+                  params:
+                    projectId: proj-acme
+                    guidelineId: guideline-deprecated-breakpoints
+
+      responses:
+        "200":
+          description: |
+            JSON-RPC 2.0 response. Contains `result` on success or `error` on failure — never
+            both. HTTP 200 is returned for both outcomes; only auth failures produce a non-200.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpWriteResponse"
+              examples:
+
+                # ── Success examples ────────────────────────────────────────────────
+                create_project_result:
+                  summary: create_project success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    result:
+                      id: proj-acme
+                      name: "Acme Web App"
+                      parentId: base
+                      createdAt: "2026-06-22T10:00:00.000Z"
+
+                update_project_result:
+                  summary: update_project success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 2
+                    result:
+                      id: proj-acme
+                      name: "Acme Web App (Redesign)"
+                      parentId: base
+                      createdAt: "2026-06-22T10:00:00.000Z"
+
+                delete_project_result:
+                  summary: delete_project success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 3
+                    result:
+                      success: true
+
+                list_tokens_result:
+                  summary: list_tokens success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 4
+                    result:
+                      tokens:
+                        - key: color.primary.500
+                          category: color
+                          value: "#0066CC"
+                          source: base
+                          isSemantic: false
+                        - key: color.text.primary
+                          category: color
+                          value: "#0052A3"
+                          source: override
+                          isSemantic: true
+                          semanticRef: color.primary.500
+
+                get_token_result:
+                  summary: get_token success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 5
+                    result:
+                      id: tok-001
+                      projectId: proj-acme
+                      key: color.primary.500
+                      category: color
+                      value: "#0066CC"
+                      isSemantic: false
+                      version: 2
+
+                create_token_result:
+                  summary: create_token success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 6
+                    result:
+                      id: tok-002
+                      projectId: base
+                      key: color.primary.500
+                      category: color
+                      value: "#0066CC"
+                      isSemantic: false
+                      version: 0
+
+                update_token_result:
+                  summary: update_token success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 7
+                    result:
+                      id: tok-002
+                      projectId: base
+                      key: color.primary.500
+                      category: color
+                      value: "#0052A3"
+                      isSemantic: false
+                      version: 3
+
+                set_token_result:
+                  summary: set_token success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 8
+                    result:
+                      id: tok-003
+                      projectId: proj-acme
+                      key: color.primary.500
+                      category: color
+                      value: "#003D8F"
+                      isSemantic: false
+                      version: 3
+
+                delete_token_result:
+                  summary: delete_token success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 9
+                    result:
+                      success: true
+
+                delete_token_override_result:
+                  summary: delete_token_override success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 10
+                    result:
+                      success: true
+
+                create_component_result:
+                  summary: create_component success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 11
+                    result:
+                      id: btn-primary
+                      projectId: base
+                      name: "Primary Button"
+                      description: "The main call-to-action button."
+                      props:
+                        - name: label
+                          type: string
+                          required: true
+                          description: "Visible button label text."
+                      variants: [default, destructive, outline]
+                      states: [default, hover, focus-visible, disabled]
+                      usageRules: ["Use for the primary action on a page.", "Limit to one per view."]
+                      accessibilityNotes: ["Must have a visible focus indicator (WCAG 2.4.7)."]
+                      version: 0
+
+                update_component_result:
+                  summary: update_component success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 12
+                    result:
+                      id: btn-primary
+                      projectId: base
+                      name: "Primary Button"
+                      description: "The main CTA button — updated for dark-mode compliance."
+                      props:
+                        - name: label
+                          type: string
+                          required: true
+                      variants: [default, destructive, outline]
+                      states: [default, hover, focus-visible, disabled]
+                      usageRules: ["Use for the primary action on a page.", "Limit to one per view."]
+                      accessibilityNotes:
+                        - "Must have a visible focus indicator (WCAG 2.4.7)."
+                        - "Label must be descriptive (WCAG 4.1.2)."
+                      version: 2
+
+                delete_component_result:
+                  summary: delete_component success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 13
+                    result:
+                      success: true
+
+                create_pattern_result:
+                  summary: create_pattern success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 14
+                    result:
+                      id: card-hero
+                      projectId: proj-acme
+                      name: "Hero Card"
+                      category: layout
+                      description: "Full-width card with image, title, and CTA button."
+                      tags: [responsive, accessibility]
+                      guidanceUrl: "https://design-docs.acme.com/patterns/hero-card"
+                      variants: []
+                      relatedComponents: []
+                      compositionRules: []
+                      createdAt: "2026-06-22T10:00:00.000Z"
+                      updatedAt: "2026-06-22T10:00:00.000Z"
+
+                update_pattern_result:
+                  summary: update_pattern success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 15
+                    result:
+                      id: card-hero
+                      projectId: proj-acme
+                      name: "Hero Card (v2)"
+                      category: layout
+                      description: "Full-width hero card with badge support."
+                      tags: [responsive, accessibility]
+                      guidanceUrl: "https://design-docs.acme.com/patterns/hero-card/v2"
+                      variants: []
+                      relatedComponents: []
+                      compositionRules: []
+                      createdAt: "2026-06-22T10:00:00.000Z"
+                      updatedAt: "2026-06-22T10:05:00.000Z"
+
+                delete_pattern_result:
+                  summary: delete_pattern success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 16
+                    result:
+                      success: true
+
+                create_variant_result:
+                  summary: create_variant success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 17
+                    result:
+                      id: variant-mobile
+                      name: mobile
+                      description: "Stack vertically on small screens."
+                      appliesAt: mobile
+                      createdAt: "2026-06-22T10:10:00.000Z"
+
+                update_variant_result:
+                  summary: update_variant success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 18
+                    result:
+                      id: variant-mobile
+                      name: mobile
+                      description: "Stack vertically; hide badge on screens below 480px."
+                      appliesAt: mobile
+                      createdAt: "2026-06-22T10:10:00.000Z"
+
+                delete_variant_result:
+                  summary: delete_variant success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 19
+                    result:
+                      success: true
+
+                create_composition_rule_result:
+                  summary: create_composition_rule success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 20
+                    result:
+                      id: rule-card-inside-grid
+                      projectId: proj-acme
+                      patternAId: card-hero
+                      patternBId: layout-grid
+                      relation: NESTING_ALLOWED
+                      guidance: "Hero cards can be placed inside grid layouts; ensure 16px spacing."
+                      createdAt: "2026-06-22T10:00:00.000Z"
+
+                delete_composition_rule_result:
+                  summary: delete_composition_rule success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 21
+                    result:
+                      success: true
+
+                create_layout_guideline_result:
+                  summary: create_layout_guideline success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 22
+                    result:
+                      id: guideline-spacing
+                      projectId: proj-acme
+                      type: spacing
+                      name: "Spacing Scale"
+                      description: "Standard spacing values in pixels."
+                      data:
+                        xs: 4
+                        sm: 8
+                        md: 16
+                        lg: 24
+                        xl: 32
+                        xxl: 48
+                      createdAt: "2026-06-22T10:00:00.000Z"
+                      updatedAt: "2026-06-22T10:00:00.000Z"
+
+                update_layout_guideline_result:
+                  summary: update_layout_guideline success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 23
+                    result:
+                      id: guideline-spacing
+                      projectId: proj-acme
+                      type: spacing
+                      name: "Spacing Scale (v2)"
+                      description: "Standard spacing values in pixels."
+                      data:
+                        xs: 2
+                        sm: 8
+                        md: 16
+                        lg: 24
+                        xl: 32
+                        xxl: 48
+                      createdAt: "2026-06-22T10:00:00.000Z"
+                      updatedAt: "2026-06-22T10:15:00.000Z"
+
+                delete_layout_guideline_result:
+                  summary: delete_layout_guideline success
+                  value:
+                    jsonrpc: "2.0"
+                    id: 24
+                    result:
+                      success: true
+
+                # ── Error examples ──────────────────────────────────────────────────
+                error_project_not_found:
+                  summary: PROJECT_NOT_FOUND domain error
+                  value:
+                    jsonrpc: "2.0"
+                    id: 2
+                    error:
+                      code: -32602
+                      message: "Invalid params"
+                      data:
+                        code: PROJECT_NOT_FOUND
+                        message: "Project 'proj-acme' was not found."
+
+                error_version_mismatch:
+                  summary: VERSION_MISMATCH (stale OCC version)
+                  value:
+                    jsonrpc: "2.0"
+                    id: 7
+                    error:
+                      code: -32603
+                      message: "Internal error"
+                      data:
+                        code: VERSION_MISMATCH
+                        message: "Token 'color.primary.500' version mismatch: expected 2, got 1. Re-fetch and retry."
+
+                error_duplicate_id:
+                  summary: DUPLICATE_PROJECT_ID conflict
+                  value:
+                    jsonrpc: "2.0"
+                    id: 1
+                    error:
+                      code: -32602
+                      message: "Invalid params"
+                      data:
+                        code: DUPLICATE_PROJECT_ID
+                        message: "A project with id 'proj-acme' already exists."
+
+                error_invalid_relation:
+                  summary: INVALID_RELATION enum error
+                  value:
+                    jsonrpc: "2.0"
+                    id: 20
+                    error:
+                      code: -32602
+                      message: "Invalid params"
+                      data:
+                        code: INVALID_RELATION
+                        message: "'NESTING_OK' is not a valid relation. Use: NESTING_ALLOWED, NESTING_FORBIDDEN, OVERRIDE_CAUTION, SIBLING_ONLY, EXCLUSIVE."
+
+                error_invalid_params:
+                  summary: Missing required param
+                  value:
+                    jsonrpc: "2.0"
+                    id: 6
+                    error:
+                      code: -32602
+                      message: "Invalid params: projectId is required"
+
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        All endpoints require `Authorization: Bearer <MCP_SECRET>`.
+        Auth errors always return HTTP 401 with one of:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — token wrong or empty after "Bearer "
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer (e.g. Basic, Digest)
+
+  schemas:
+
+    # ── JSON-RPC envelope ──────────────────────────────────────────────────────────
+
+    McpWriteRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+          description: Must be exactly "2.0".
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+          description: Client-chosen request identifier echoed in the response.
+          example: 1
+        method:
+          type: string
+          enum:
+            # Projects
+            - create_project
+            - update_project
+            - delete_project
+            # Tokens
+            - list_tokens
+            - get_token
+            - create_token
+            - update_token
+            - set_token
+            - delete_token
+            - delete_token_override
+            # Components
+            - create_component
+            - update_component
+            - delete_component
+            # Patterns
+            - create_pattern
+            - update_pattern
+            - delete_pattern
+            - create_variant
+            - update_variant
+            - delete_variant
+            - create_composition_rule
+            - delete_composition_rule
+            - create_layout_guideline
+            - update_layout_guideline
+            - delete_layout_guideline
+          description: P3 write tool name.
+        params:
+          type: object
+          description: |
+            Tool arguments — schema varies by method; see per-method schemas below.
+          additionalProperties: true
+          default: {}
+
+    McpWriteResult:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        result:
+          description: |
+            Tool-specific result payload. Shape varies by method:
+            - create_project / update_project → Project
+            - delete_project / delete_token / delete_token_override / delete_component /
+              delete_pattern / delete_variant / delete_composition_rule /
+              delete_layout_guideline → SuccessAck
+            - list_tokens → { tokens: ResolvedToken[] }
+            - get_token / create_token / update_token / set_token → Token
+            - create_component / update_component → ComponentSpec
+            - create_pattern / update_pattern → Pattern
+            - create_variant / update_variant → PatternVariant
+            - create_composition_rule → CompositionRule
+            - create_layout_guideline / update_layout_guideline → LayoutGuideline
+          additionalProperties: true
+
+    McpErrorData:
+      type: object
+      required: [code, message]
+      description: |
+        Domain error detail carried in the JSON-RPC `error.data` field.
+        Use `code` for programmatic logic; never parse `message`.
+
+        All P1/P2 codes remain valid. New P3 codes:
+
+        Registry:     PROJECT_NOT_FOUND, DUPLICATE_PROJECT_ID, CONFLICT,
+                      BASE_HAS_CHILDREN, PROJECT_HAS_TOKENS
+
+        Token:        TOKEN_NOT_FOUND, DUPLICATE_TOKEN, CONFLICT, VERSION_MISMATCH,
+                      INVALID_CATEGORY, TOKEN_REFERENCED_BY_SEMANTIC
+
+        Component:    COMPONENT_NOT_FOUND, DUPLICATE_COMPONENT_ID, CONFLICT,
+                      VERSION_MISMATCH
+
+        Pattern:      PATTERN_NOT_FOUND, DUPLICATE_PATTERN_ID, INVALID_PATTERN_ID,
+                      PATTERN_IN_USE, INVALID_PATTERN_CATEGORY
+
+        Composition:  DUPLICATE_COMPOSITION_RULE, COMPOSITION_RULE_NOT_FOUND,
+                      INVALID_RELATION
+
+        Guideline:    GUIDELINE_NOT_FOUND, GUIDELINE_IN_USE, INVALID_TYPE
+      properties:
+        code:
+          type: string
+          description: Machine-readable domain error code. Stable across versions.
+          example: VERSION_MISMATCH
+        message:
+          type: string
+          description: Human-readable error message. Do not parse this field.
+          example: "Token 'color.primary.500' version mismatch: expected 2, got 1."
+
+    McpWriteError:
+      type: object
+      required: [jsonrpc, id, error]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+              description: |
+                JSON-RPC 2.0 standard error code:
+                  -32700  Parse error
+                  -32600  Invalid Request
+                  -32601  Method not found
+                  -32602  Invalid params (also used for domain validation errors)
+                  -32603  Internal error (also used for domain conflict/OCC errors)
+              example: -32602
+            message:
+              type: string
+              description: Short JSON-RPC error summary.
+              example: "Invalid params"
+            data:
+              $ref: "#/components/schemas/McpErrorData"
+              description: |
+                Optional domain error detail. Present for all domain errors
+                (PROJECT_NOT_FOUND, VERSION_MISMATCH, etc.). Absent for pure
+                protocol errors (parse error, invalid JSON-RPC structure).
+
+    McpWriteResponse:
+      description: |
+        Per JSON-RPC 2.0, a response contains either `result` or `error`, never both.
+      oneOf:
+        - $ref: "#/components/schemas/McpWriteResult"
+        - $ref: "#/components/schemas/McpWriteError"
+
+    # ── Shared domain schemas ──────────────────────────────────────────────────────
+
+    SuccessAck:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          description: Always true. Returned by all delete methods on success.
+      example:
+        success: true
+
+    # ── Project params ─────────────────────────────────────────────────────────────
+
+    CreateProjectParams:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Desired project ID (must be unique).
+          example: proj-acme
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable project name.
+          example: "Acme Web App"
+        parentId:
+          type: string
+          description: |
+            ID of the parent project to inherit from.
+            Omit to create a top-level (base) project.
+          example: base
+
+    UpdateProjectParams:
+      type: object
+      required: [projectId, name]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          description: ID of the project to update.
+          example: proj-acme
+        name:
+          type: string
+          minLength: 1
+          description: New display name for the project.
+          example: "Acme Web App (Redesign)"
+
+    DeleteProjectParams:
+      type: object
+      required: [projectId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          description: ID of the project to delete.
+          example: proj-acme
+
+    # ── Token params ───────────────────────────────────────────────────────────────
+
+    ListTokensParams:
+      type: object
+      required: [projectId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          description: Project to list resolved tokens for.
+          example: proj-acme
+        category:
+          $ref: "#/components/schemas/TokenCategory"
+          description: Optional filter — returns only tokens of this category.
+
+    GetTokenParams:
+      type: object
+      required: [projectId, key]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        key:
+          type: string
+          minLength: 1
+          description: Token key in dot-notation.
+          example: color.primary.500
+
+    CreateTokenParams:
+      type: object
+      required: [projectId, key, category, value]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        key:
+          type: string
+          minLength: 1
+          description: Token key in dot-notation (e.g. `color.primary.500`).
+          example: color.primary.500
+        category:
+          $ref: "#/components/schemas/TokenCategory"
+        value:
+          type: string
+          minLength: 1
+          description: Raw token value (hex color, px value, font-family, etc.).
+          example: "#0066CC"
+        isSemantic:
+          type: boolean
+          default: false
+          description: |
+            Set to true when this token references another token via `semanticRef`.
+        semanticRef:
+          type: string
+          description: Key of the primitive token this semantic token resolves to.
+          example: color.primary.500
+
+    UpdateTokenParams:
+      type: object
+      required: [projectId, key, version]
+      description: |
+        Requires the current `version` obtained from a prior `get_token` call.
+        A stale version returns VERSION_MISMATCH (-32603 + data.code).
+        At least one of `value` or `semanticRef` must be supplied.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        key:
+          type: string
+          minLength: 1
+          example: color.primary.500
+        version:
+          type: integer
+          minimum: 0
+          description: Expected current version (OCC guard).
+          example: 2
+        value:
+          type: string
+          minLength: 1
+          description: New token value.
+          example: "#0052A3"
+        semanticRef:
+          type: string
+          description: Updated semantic reference key.
+
+    SetTokenParams:
+      type: object
+      required: [projectId, key, value, version]
+      description: |
+        Creates or replaces a project-level token override.
+        Requires the current `version` of the token (obtained from `get_token`).
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        key:
+          type: string
+          minLength: 1
+          example: color.primary.500
+        value:
+          type: string
+          minLength: 1
+          description: Override value for this project.
+          example: "#003D8F"
+        version:
+          type: integer
+          minimum: 0
+          description: Expected current version of the token (OCC guard).
+          example: 2
+
+    DeleteTokenParams:
+      type: object
+      required: [projectId, key, version]
+      description: |
+        Permanently removes a token. Requires the current `version` (OCC guard).
+        Fails with TOKEN_REFERENCED_BY_SEMANTIC if the token is still referenced.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        key:
+          type: string
+          minLength: 1
+          example: color.deprecated.300
+        version:
+          type: integer
+          minimum: 0
+          description: Expected current version (OCC guard).
+          example: 1
+
+    DeleteTokenOverrideParams:
+      type: object
+      required: [projectId, key]
+      description: Reverts a project-level token override, restoring the base value.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        key:
+          type: string
+          minLength: 1
+          example: color.primary.500
+
+    # ── Component params ───────────────────────────────────────────────────────────
+
+    CreateComponentParams:
+      type: object
+      required: [projectId, id, name]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        id:
+          type: string
+          minLength: 1
+          description: Component identifier (e.g. `btn-primary`). Must be unique within the project.
+          example: btn-primary
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable component name.
+          example: "Primary Button"
+        description:
+          type: string
+          example: "The main call-to-action button."
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentProp"
+          description: Component prop definitions.
+        variants:
+          type: array
+          items:
+            type: string
+          example: [default, destructive, outline]
+        states:
+          type: array
+          items:
+            type: string
+          example: [default, hover, focus-visible, disabled]
+        usageRules:
+          type: array
+          items:
+            type: string
+        accessibilityNotes:
+          type: array
+          items:
+            type: string
+
+    UpdateComponentParams:
+      type: object
+      required: [projectId, componentId, version]
+      description: |
+        Requires the current `version` obtained from a prior `get_component_spec` call.
+        A stale version returns VERSION_MISMATCH. At least one optional field must be supplied.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        componentId:
+          type: string
+          minLength: 1
+          example: btn-primary
+        version:
+          type: integer
+          minimum: 0
+          description: Expected current version (OCC guard).
+          example: 1
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentProp"
+          description: Replaces the entire props array.
+        variants:
+          type: array
+          items:
+            type: string
+          description: Replaces the entire variants array.
+        states:
+          type: array
+          items:
+            type: string
+          description: Replaces the entire states array.
+        usageRules:
+          type: array
+          items:
+            type: string
+          description: Replaces the entire usageRules array.
+        accessibilityNotes:
+          type: array
+          items:
+            type: string
+          description: Replaces the entire accessibilityNotes array.
+
+    DeleteComponentParams:
+      type: object
+      required: [projectId, componentId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: base
+        componentId:
+          type: string
+          minLength: 1
+          example: btn-legacy
+
+    # ── Pattern params ─────────────────────────────────────────────────────────────
+
+    CreatePatternParams:
+      type: object
+      required: [projectId, id, name, category]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        id:
+          type: string
+          description: |
+            Pattern ID. Must be kebab-case: lowercase alphanumeric segments separated by
+            hyphens (e.g. `card-hero`, `btn-group`). Fails with INVALID_PATTERN_ID if
+            the format is violated.
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          example: card-hero
+        name:
+          type: string
+          minLength: 1
+          example: "Hero Card"
+        category:
+          $ref: "#/components/schemas/PatternCategory"
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+          example: [responsive, accessibility]
+        guidanceUrl:
+          type: string
+          format: uri
+          example: "https://design-docs.acme.com/patterns/hero-card"
+
+    UpdatePatternParams:
+      type: object
+      required: [projectId, patternId]
+      description: At least one of the optional fields must be supplied.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternId:
+          type: string
+          minLength: 1
+          example: card-hero
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        guidanceUrl:
+          type: string
+          format: uri
+
+    DeletePatternParams:
+      type: object
+      required: [projectId, patternId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternId:
+          type: string
+          minLength: 1
+          example: card-deprecated
+
+    CreateVariantParams:
+      type: object
+      required: [projectId, patternId, name, appliesAt]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternId:
+          type: string
+          minLength: 1
+          example: card-hero
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable variant name (e.g. `mobile`, `tablet`, `desktop`).
+          example: mobile
+        appliesAt:
+          $ref: "#/components/schemas/BreakpointName"
+        description:
+          type: string
+          example: "Stack vertically on small screens."
+
+    UpdateVariantParams:
+      type: object
+      required: [projectId, patternId, variantId]
+      description: At least one of the optional fields must be supplied.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternId:
+          type: string
+          minLength: 1
+          example: card-hero
+        variantId:
+          type: string
+          minLength: 1
+          example: variant-mobile
+        name:
+          type: string
+          minLength: 1
+        appliesAt:
+          $ref: "#/components/schemas/BreakpointName"
+        description:
+          type: string
+
+    DeleteVariantParams:
+      type: object
+      required: [projectId, patternId, variantId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternId:
+          type: string
+          minLength: 1
+          example: card-hero
+        variantId:
+          type: string
+          minLength: 1
+          example: variant-wide
+
+    CreateCompositionRuleParams:
+      type: object
+      required: [projectId, patternAId, patternBId, relation]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        patternAId:
+          type: string
+          minLength: 1
+          description: First pattern ID in the composition pair.
+          example: card-hero
+        patternBId:
+          type: string
+          minLength: 1
+          description: Second pattern ID in the composition pair.
+          example: layout-grid
+        relation:
+          $ref: "#/components/schemas/CompositionRelation"
+        guidance:
+          type: string
+          description: Optional human-readable guidance for the constraint.
+          example: "Hero cards can be placed inside grid layouts; ensure 16px spacing."
+
+    DeleteCompositionRuleParams:
+      type: object
+      required: [projectId, ruleId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        ruleId:
+          type: string
+          minLength: 1
+          description: Composition rule ID to delete.
+          example: rule-card-inside-grid
+
+    CreateLayoutGuidelineParams:
+      type: object
+      required: [projectId, type, name, data]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        type:
+          $ref: "#/components/schemas/GuidelineType"
+        name:
+          type: string
+          minLength: 1
+          example: "Spacing Scale"
+        description:
+          type: string
+          example: "Standard spacing values in pixels."
+        data:
+          type: object
+          additionalProperties: true
+          description: |
+            Guideline-specific data structure. Shape varies by type:
+            - breakpoints: `{ "mobile": { "min": 0, "max": 479 }, ... }`
+            - spacing:     `{ "xs": 4, "sm": 8, "md": 16, ... }`
+            - grid:        `{ "columns": 12, "gap": 16, ... }`
+            - alignment:   `{ "horizontal": ["start","center","end"], ... }`
+            - typography:  `{ "size": {...}, "weight": {...}, ... }`
+            - animation:   `{ "duration": {...}, "easing": {...}, ... }`
+          example:
+            xs: 4
+            sm: 8
+            md: 16
+            lg: 24
+
+    UpdateLayoutGuidelineParams:
+      type: object
+      required: [projectId, guidelineId]
+      description: At least one of the optional fields must be supplied.
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        guidelineId:
+          type: string
+          minLength: 1
+          example: guideline-spacing
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+          description: Replaces the entire data object.
+
+    DeleteLayoutGuidelineParams:
+      type: object
+      required: [projectId, guidelineId]
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+          example: proj-acme
+        guidelineId:
+          type: string
+          minLength: 1
+          example: guideline-deprecated-breakpoints
+
+    # ── Reused domain types (duplicated from P1/P2 for self-contained spec) ────────
+
+    TokenCategory:
+      type: string
+      enum: [color, spacing, typography, radius, shadow, breakpoint]
+      description: One of the six supported token categories.
+      example: color
+
+    BreakpointName:
+      type: string
+      enum: [mobile, tablet, desktop, wide]
+      description: Responsive breakpoint identifier.
+      example: mobile
+
+    PatternCategory:
+      type: string
+      enum: [layout, component, interaction, accessibility, animation, spacing, color, typography]
+      description: Pattern classification. Matches P2 PatternCategory.
+      example: layout
+
+    CompositionRelation:
+      type: string
+      enum: [NESTING_ALLOWED, NESTING_FORBIDDEN, OVERRIDE_CAUTION, SIBLING_ONLY, EXCLUSIVE]
+      description: |
+        Relation type between two patterns:
+        - `NESTING_ALLOWED`   — patternA can be safely nested inside patternB
+        - `NESTING_FORBIDDEN` — patternA must not nest inside patternB
+        - `OVERRIDE_CAUTION`  — patterns can coexist but with caveats (see guidance)
+        - `SIBLING_ONLY`      — patterns can be siblings but not nested
+        - `EXCLUSIVE`         — patterns cannot appear together in the same view/component
+      example: NESTING_ALLOWED
+
+    GuidelineType:
+      type: string
+      enum: [breakpoints, spacing, grid, alignment, typography, animation]
+      description: |
+        Type of layout guideline:
+        - `breakpoints` — responsive breakpoint definitions
+        - `spacing`     — spacing scale (margin/padding values)
+        - `grid`        — grid system parameters
+        - `alignment`   — alignment and justification rules
+        - `typography`  — font, line-height, letter-spacing rules
+        - `animation`   — animation/transition timing and easing
+      example: spacing
+
+    ComponentProp:
+      type: object
+      required: [name, type, required]
+      properties:
+        name:
+          type: string
+          example: label
+        type:
+          type: string
+          example: string
+        required:
+          type: boolean
+        default:
+          type: string
+          description: Default value as a string literal.
+        description:
+          type: string
+          example: "Visible button label text."
+
+    AuthErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [MISSING_AUTH_HEADER, INVALID_TOKEN, INVALID_AUTH_SCHEME]
+            message:
+              type: string
+      example:
+        error:
+          code: MISSING_AUTH_HEADER
+          message: "Authorization header is required."
+
+  responses:
+    Unauthorized:
+      description: |
+        Authentication failed. Possible codes:
+        - `MISSING_AUTH_HEADER` — Authorization header absent
+        - `INVALID_TOKEN` — wrong or empty token
+        - `INVALID_AUTH_SCHEME` — scheme is not Bearer
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: 'Bearer realm="mpds-mcp"'
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthErrorEnvelope"
+          examples:
+            missingHeader:
+              value:
+                error:
+                  code: MISSING_AUTH_HEADER
+                  message: "Authorization header is required."
+            invalidToken:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: "The provided bearer token is invalid."
+
+tags:
+  - name: MCP Write Tools
+    description: |
+      P3 write tools — 23 JSON-RPC methods that let AI agents create and mutate projects,
+      tokens, components, patterns, variants, composition rules, and layout guidelines
+      through the existing POST /mcp endpoint.

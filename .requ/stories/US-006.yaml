@@ -1,0 +1,28 @@
+id: US-006
+title: Bootstrap a project via MCP
+description: "As an AI design agent, I want to create and configure a design system project via MCP so that I can bootstrap a project without making REST calls"
+requirements:
+  - REQ-006
+acceptanceCriteria:
+  - id: AC-1
+    text: "Given a valid project id, name, and optional parentId, when I call the create_project MCP method, then the project is created and its details are returned"
+  - id: AC-2
+    text: "Given an existing project, when I call update_project with a new name, then the project name is updated and the updated record is returned"
+  - id: AC-3
+    text: "Given an existing project, when I call delete_project with the project id, then the project is removed and subsequent get_project returns NOT_FOUND"
+  - id: AC-4
+    text: "Given a project id that already exists, when I call create_project with the same id, then a clear DUPLICATE_PROJECT_ID error is returned"
+  - id: AC-5
+    text: "Given a project created with a parentId, when I resolve tokens for that project, then tokens inherit from the parent project where not overridden"
+coverage: covered
+phase: P3
+testHooks: "Tag MCP JSON-RPC integration tests with @US-006; assert tool response envelopes for create/update/delete project methods; include negative case for duplicate id"
+execution:
+  runId: p3-verify-2026-06-22
+  ranAt: 2026-06-22T10:00:00.000Z
+  status: passed
+  scenarioCount: 5
+  source: cucumber-json
+  feature: "Project Management via MCP Write Tools"
+createdAt: 2026-06-22T08:00:10.000Z
+updatedAt: 2026-06-22T10:00:00.000Z

@@ -4,19 +4,51 @@ import {
   listProjects,
   getProject,
   createProject,
+  updateProject,
   deleteProject,
   RegistryError,
 } from '../../registry/index';
 import {
   resolveTokens,
+  createToken,
+  getToken,
+  listTokens,
+  updateToken,
+  deleteToken,
+  setOverride as setTokenOverride,
   deleteOverride as deleteTokenOverride,
   TokensError,
 } from '../../tokens/index';
 import {
   listSpecs,
   getSpec,
+  createSpec,
+  updateSpec,
+  deleteSpec,
   ComponentsError,
 } from '../../components/index';
+import {
+  createPattern,
+  getPattern,
+  listPatterns,
+  updatePattern,
+  deletePattern,
+  createVariant,
+  getVariant,
+  listVariants,
+  updateVariant,
+  deleteVariant,
+  createCompositionRule,
+  listCompositionRules,
+  getCompositionRules,
+  deleteCompositionRule,
+  createLayoutGuideline,
+  getLayoutGuideline,
+  listLayoutGuidelines,
+  updateLayoutGuideline,
+  deleteLayoutGuideline,
+  PatternsError,
+} from '../../patterns/index';
 import {
   validateColorPair,
   validateSnippet,
@@ -410,6 +442,176 @@ async function dispatchMcp(
         };
       }
 
+      case 'create_project': {
+        const { id, name, parentId } = (rpc.params ?? {}) as { id: string; name: string; parentId?: string };
+        const result = await createProject({ id, name, parentId });
+        return { result };
+      }
+
+      case 'update_project': {
+        const { projectId, name } = (rpc.params ?? {}) as { projectId: string; name: string };
+        const result = await updateProject(projectId, { name });
+        return { result };
+      }
+
+      case 'delete_project': {
+        const { projectId } = (rpc.params ?? {}) as { projectId: string };
+        await deleteProject(projectId);
+        return { result: { success: true } };
+      }
+
+      case 'list_tokens': {
+        const { projectId, category } = (rpc.params ?? {}) as { projectId: string; category?: string };
+        const result = await listTokens(projectId, category);
+        return { result };
+      }
+
+      case 'get_token': {
+        const { projectId, key } = (rpc.params ?? {}) as { projectId: string; key: string };
+        const result = await getToken(projectId, key);
+        return { result };
+      }
+
+      case 'create_token': {
+        const { projectId, key, category, value, isSemantic, semanticRef } = (rpc.params ?? {}) as {
+          projectId: string; key: string; category: string; value: string; isSemantic?: boolean; semanticRef?: string;
+        };
+        const result = await createToken({ projectId, key, category, value, isSemantic: isSemantic ?? false, semanticRef });
+        return { result };
+      }
+
+      case 'update_token': {
+        const { projectId, key, version, value, semanticRef } = (rpc.params ?? {}) as {
+          projectId: string; key: string; version: number; value?: string; semanticRef?: string;
+        };
+        const result = await updateToken(projectId, key, { version, value, semanticRef });
+        return { result };
+      }
+
+      case 'set_token': {
+        const { projectId, key, value, version } = (rpc.params ?? {}) as {
+          projectId: string; key: string; value: string; version: number;
+        };
+        const result = await setTokenOverride(projectId, key, value, version);
+        return { result };
+      }
+
+      case 'delete_token': {
+        const { projectId, key, version } = (rpc.params ?? {}) as { projectId: string; key: string; version: number };
+        await deleteToken(projectId, key, version);
+        return { result: { success: true } };
+      }
+
+      case 'delete_token_override': {
+        const { projectId, key } = (rpc.params ?? {}) as { projectId: string; key: string };
+        await deleteTokenOverride(projectId, key);
+        return { result: { success: true } };
+      }
+
+      case 'create_component': {
+        const { projectId, id, name, description, props, variants, states, usageRules, accessibilityNotes } = (rpc.params ?? {}) as {
+          projectId: string; id: string; name: string; description?: string; props?: unknown; variants?: unknown; states?: unknown; usageRules?: unknown; accessibilityNotes?: unknown;
+        };
+        const result = await createSpec({ id, projectId, name, description, props, variants, states, usageRules, accessibilityNotes } as Parameters<typeof createSpec>[0]);
+        return { result };
+      }
+
+      case 'update_component': {
+        const { projectId, componentId, version, name, description, props, variants, states, usageRules, accessibilityNotes } = (rpc.params ?? {}) as {
+          projectId: string; componentId: string; version: number; name?: string; description?: string; props?: unknown; variants?: unknown; states?: unknown; usageRules?: unknown; accessibilityNotes?: unknown;
+        };
+        const result = await updateSpec(projectId, componentId, { version, name, description, props, variants, states, usageRules, accessibilityNotes } as Parameters<typeof updateSpec>[2]);
+        return { result };
+      }
+
+      case 'delete_component': {
+        const { projectId, componentId } = (rpc.params ?? {}) as { projectId: string; componentId: string };
+        await deleteSpec(projectId, componentId);
+        return { result: { success: true } };
+      }
+
+      case 'create_pattern': {
+        const { projectId, id, name, category, description, tags, guidanceUrl } = (rpc.params ?? {}) as {
+          projectId: string; id: string; name: string; category: string; description?: string; tags?: string[]; guidanceUrl?: string;
+        };
+        const result = await createPattern(projectId, { id, name, category, description, tags, guidanceUrl });
+        return { result };
+      }
+
+      case 'update_pattern': {
+        const { projectId, patternId, name, description, tags, guidanceUrl } = (rpc.params ?? {}) as {
+          projectId: string; patternId: string; name?: string; description?: string; tags?: string[]; guidanceUrl?: string;
+        };
+        const result = await updatePattern(projectId, patternId, { name, description, tags, guidanceUrl });
+        return { result };
+      }
+
+      case 'delete_pattern': {
+        const { projectId, patternId } = (rpc.params ?? {}) as { projectId: string; patternId: string };
+        await deletePattern(projectId, patternId);
+        return { result: { success: true } };
+      }
+
+      case 'create_variant': {
+        const { projectId, patternId, name, appliesAt, description } = (rpc.params ?? {}) as {
+          projectId: string; patternId: string; name: string; appliesAt: string; description?: string;
+        };
+        const result = await createVariant(projectId, patternId, { name, appliesAt, description });
+        return { result };
+      }
+
+      case 'update_variant': {
+        const { projectId, patternId, variantId, name, appliesAt, description } = (rpc.params ?? {}) as {
+          projectId: string; patternId: string; variantId: string; name?: string; appliesAt?: string; description?: string;
+        };
+        const result = await updateVariant(projectId, patternId, variantId, { name, appliesAt, description });
+        return { result };
+      }
+
+      case 'delete_variant': {
+        const { projectId, patternId, variantId } = (rpc.params ?? {}) as {
+          projectId: string; patternId: string; variantId: string;
+        };
+        await deleteVariant(projectId, patternId, variantId);
+        return { result: { success: true } };
+      }
+
+      case 'create_composition_rule': {
+        const { projectId, patternAId, patternBId, relation, guidance } = (rpc.params ?? {}) as {
+          projectId: string; patternAId: string; patternBId: string; relation: string; guidance?: string;
+        };
+        const result = await createCompositionRule(projectId, { patternAId, patternBId, relation, guidance });
+        return { result };
+      }
+
+      case 'delete_composition_rule': {
+        const { projectId, ruleId } = (rpc.params ?? {}) as { projectId: string; ruleId: string };
+        await deleteCompositionRule(projectId, ruleId);
+        return { result: { success: true } };
+      }
+
+      case 'create_layout_guideline': {
+        const { projectId, type, name, description, data } = (rpc.params ?? {}) as {
+          projectId: string; type: string; name: string; description?: string; data: Record<string, unknown>;
+        };
+        const result = await createLayoutGuideline(projectId, { type, name, description, data });
+        return { result };
+      }
+
+      case 'update_layout_guideline': {
+        const { projectId, guidelineId, name, description, data } = (rpc.params ?? {}) as {
+          projectId: string; guidelineId: string; name?: string; description?: string; data?: Record<string, unknown>;
+        };
+        const result = await updateLayoutGuideline(projectId, guidelineId, { name, description, data });
+        return { result };
+      }
+
+      case 'delete_layout_guideline': {
+        const { projectId, guidelineId } = (rpc.params ?? {}) as { projectId: string; guidelineId: string };
+        await deleteLayoutGuideline(projectId, guidelineId);
+        return { result: { success: true } };
+      }
+
       default:
         return {
           error: { code: 'METHOD_NOT_FOUND', message: 'Unknown method: ' + rpc.method },
@@ -420,7 +622,8 @@ async function dispatchMcp(
       err instanceof RegistryError ||
       err instanceof TokensError ||
       err instanceof ComponentsError ||
-      err instanceof ValidateError
+      err instanceof ValidateError ||
+      err instanceof PatternsError
     ) {
       return {
         error: {

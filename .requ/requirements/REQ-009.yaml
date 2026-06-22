@@ -1,0 +1,15 @@
+id: REQ-009
+title: Pattern Library Management via MCP
+description: AI agents can manage the full pattern library (patterns, variants, composition rules, layout guidelines) via MCP tools
+source: REQ-P3-004
+priority: high
+components: []
+tags:
+  - P3
+  - patterns
+  - MCP
+  - write-ops
+status: active
+phase: P3
+createdAt: 2026-06-22T08:00:04.000Z
+updatedAt: 2026-06-22T08:00:04.000Z

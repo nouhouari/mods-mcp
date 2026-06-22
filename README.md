@@ -104,6 +104,129 @@ POST   /api/validate/color-pair     body: { foreground, background }
 
 See [`contracts/P1/`](contracts/P1/) for the full frozen OpenAPI spec.
 
+## MCP configuration
+
+The server exposes a JSON-RPC 2.0 endpoint at `POST /mcp` (requires the same `Authorization: Bearer <MCP_SECRET>` header as the REST API). Configure it in your MCP client as an HTTP server.
+
+### Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "mpds": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:3100/mcp"],
+      "env": {
+        "MCP_REMOTE_HEADER_AUTHORIZATION": "Bearer <MCP_SECRET>"
+      }
+    }
+  }
+}
+```
+
+### Claude Code (`.claude/settings.json` in your project)
+
+```json
+{
+  "mcpServers": {
+    "mpds": {
+      "type": "http",
+      "url": "http://localhost:3100/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_SECRET>"
+      }
+    }
+  }
+}
+```
+
+### GitHub Copilot (`.vscode/mcp.json` in your workspace)
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "mpds_secret",
+      "description": "MPDS MCP bearer token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "mpds": {
+      "type": "http",
+      "url": "http://localhost:3100/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:mpds_secret}"
+      }
+    }
+  }
+}
+```
+
+The `input` block causes VS Code to prompt for the secret once per session and store it in the system keychain. To skip the prompt, replace `${input:mpds_secret}` with the token literal (not recommended for shared workspaces).
+
+### OpenCode (`opencode.json` in your project root, or `~/.config/opencode/opencode.json` globally)
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mpds": {
+      "type": "remote",
+      "url": "http://localhost:3100/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer <MCP_SECRET>"
+      }
+    }
+  }
+}
+```
+
+To avoid hard-coding the secret, reference an environment variable using OpenCode's `{env:VAR}` interpolation:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mpds": {
+      "type": "remote",
+      "url": "http://localhost:3100/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:MCP_SECRET}"
+      }
+    }
+  }
+}
+```
+
+### Available MCP methods
+
+| Method | Description | Required params |
+|---|---|---|
+| `list_projects` | List all design-system projects | — |
+| `get_tokens` | Resolve tokens for a project (with inheritance) | `projectId`, `category?` |
+| `get_design_system` | Get full token map + component specs for a project | `projectId` |
+| `get_component_spec` | Get spec for a single component | `projectId`, `componentId` |
+| `validate_color_pair` | Check WCAG contrast ratio | `fg`, `bg`, `context` (`normal`\|`large`\|`ui`) |
+| `validate_token_pair` | Check contrast using token keys | `projectId`, `fgKey`, `bgKey`, `context` |
+| `validate_snippet` | Lint an HTML/JSX snippet for a11y issues | `content`, `contentType?` (`html`\|`jsx`) |
+| `create_guideline` | Create a design guideline | `id`, `title`, `body?`, `tags?` |
+| `search_guidelines` | Full-text search guidelines | `query` |
+| `propose_token_override` | Propose a token value change for review | `projectId`, `tokenKey`, `proposedValue`, `rationale?`, `agentId?` |
+| `list_proposals` | List pending token proposals for a project | `projectId` |
+
+All requests follow JSON-RPC 2.0:
+
+```bash
+curl -s http://localhost:3100/mcp \
+  -H "Authorization: Bearer <MCP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"list_projects","params":{}}' | jq
+```
+
 ## Running tests
 
 Tests use an in-memory SQLite database and require no external services:
