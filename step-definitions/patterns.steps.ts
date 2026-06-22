@@ -10,6 +10,8 @@ import * as patternsService from '../modules/patterns/index';
  * following the same pattern as other services (tokens, components).
  */
 
+const projectId = 'test-project';
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -49,30 +51,21 @@ When('I POST to {string} with:', async function (this: MpdsWorld, endpoint: stri
   
   try {
     if (endpoint === '/api/v1/patterns') {
-      this.lastResponse = await patternsService.createPattern(data as any);
+      this.lastResponse = await patternsService.createPattern(projectId, data as any);
       this.lastStatus = 201;
       this.lastPatternId = this.lastResponse.id;
     } else if (endpoint.includes('/variants') && endpoint.includes('{pattern_id}')) {
       const patternId = this.lastPatternId;
-      this.lastResponse = await patternsService.createVariant(patternId!, data as any);
+      this.lastResponse = await patternsService.createVariant(projectId, patternId!, data as any);
       this.lastStatus = 201;
     } else if (endpoint === '/api/v1/composition-rules') {
-      this.lastResponse = await patternsService.createCompositionRule(data as any);
+      this.lastResponse = await patternsService.createCompositionRule(projectId, data as any);
       this.lastStatus = 201;
       this.lastRuleId = this.lastResponse.id;
     } else if (endpoint.includes('/layout-guidelines') && endpoint.includes('{pattern_id}')) {
       const patternId = this.lastPatternId;
-      this.lastResponse = await patternsService.createLayoutGuideline(patternId!, data as any);
+      this.lastResponse = await patternsService.createLayoutGuideline(projectId, data as any);
       this.lastStatus = 201;
-    } else if (endpoint === '/api/v1/patterns/validate') {
-      this.lastResponse = await patternsService.validatePattern(data);
-      this.lastStatus = 200;
-    } else if (endpoint === '/api/v1/patterns/batch-validate') {
-      this.lastResponse = await patternsService.validatePatternBatch(data as any);
-      this.lastStatus = 207;
-    } else if (endpoint === '/api/v1/patterns/lint') {
-      this.lastResponse = await patternsService.lintPattern(data);
-      this.lastStatus = 200;
     }
   } catch (err: any) {
     if (err instanceof patternsService.PatternsError) {
@@ -95,38 +88,38 @@ When('I GET {string}', async function (this: MpdsWorld, endpoint: string) {
       .replace('{rule_id}', this.lastRuleId || '');
 
     if (resolvedEndpoint === '/api/v1/patterns' || resolvedEndpoint.startsWith('/api/v1/patterns?')) {
-      this.lastResponse = await patternsService.listPatterns({});
+      this.lastResponse = await patternsService.listPatterns(projectId, {});
       this.lastStatus = 200;
     } else if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/composition') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
-      this.lastResponse = await patternsService.getPattern(patternId);
+      this.lastResponse = await patternsService.getPattern(projectId, patternId);
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/variants') && !resolvedEndpoint.split('/variants')[1]) {
       const patternId = resolvedEndpoint.split('/')[4];
-      this.lastResponse = await patternsService.listVariants(patternId);
+      this.lastResponse = await patternsService.listVariants(projectId, patternId);
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/variants/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
-      const variantName = parts[6];
-      this.lastResponse = await patternsService.getVariant(patternId, variantName);
+      const variantId = parts[6];
+      this.lastResponse = await patternsService.getVariant(projectId, patternId, variantId);
       this.lastStatus = 200;
     } else if (resolvedEndpoint === '/api/v1/composition-rules' || resolvedEndpoint.startsWith('/api/v1/composition-rules?')) {
-      this.lastResponse = await patternsService.listCompositionRules({});
+      this.lastResponse = await patternsService.listCompositionRules(projectId, {});
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/composition-rules') && !resolvedEndpoint.endsWith('/composition-rules')) {
       const patternId = resolvedEndpoint.split('/')[4];
-      this.lastResponse = await patternsService.getCompositionRules(patternId);
+      this.lastResponse = await patternsService.getCompositionRules(projectId, patternId);
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/layout-guidelines') && !resolvedEndpoint.split('/layout-guidelines')[1]) {
       const patternId = resolvedEndpoint.split('/')[4];
-      this.lastResponse = await patternsService.listLayoutGuidelines(patternId);
+      this.lastResponse = await patternsService.listLayoutGuidelines(projectId, {});
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
       const guidelineId = parts[6];
-      this.lastResponse = await patternsService.getLayoutGuideline(patternId, guidelineId);
+      this.lastResponse = await patternsService.getLayoutGuideline(projectId, guidelineId);
       this.lastStatus = 200;
     }
   } catch (err: any) {
@@ -151,19 +144,19 @@ When('I PATCH {string} with:', async function (this: MpdsWorld, endpoint: string
 
     if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
-      this.lastResponse = await patternsService.updatePattern(patternId, data);
+      this.lastResponse = await patternsService.updatePattern(projectId, patternId, data);
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/variants/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
-      const variantName = parts[6];
-      this.lastResponse = await patternsService.updateVariant(patternId, variantName, data);
+      const variantId = parts[6];
+      this.lastResponse = await patternsService.updateVariant(projectId, patternId, variantId, data);
       this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
       const guidelineId = parts[6];
-      this.lastResponse = await patternsService.updateLayoutGuideline(patternId, guidelineId, data);
+      this.lastResponse = await patternsService.updateLayoutGuideline(projectId, guidelineId, data);
       this.lastStatus = 200;
     }
   } catch (err: any) {
@@ -186,23 +179,23 @@ When('I DELETE {string}', async function (this: MpdsWorld, endpoint: string) {
 
     if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/composition') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
-      await patternsService.deletePattern(patternId);
+      await patternsService.deletePattern(projectId, patternId);
       this.lastStatus = 204;
     } else if (resolvedEndpoint.includes('/variants/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
-      const variantName = parts[6];
-      await patternsService.deleteVariant(patternId, variantName);
+      const variantId = parts[6];
+      await patternsService.deleteVariant(projectId, patternId, variantId);
       this.lastStatus = 204;
     } else if (resolvedEndpoint.match(/^\/api\/v1\/composition-rules\/[^/]+$/)) {
       const ruleId = resolvedEndpoint.split('/')[4];
-      await patternsService.deleteCompositionRule(ruleId);
+      await patternsService.deleteCompositionRule(projectId, ruleId);
       this.lastStatus = 204;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
       const parts = resolvedEndpoint.split('/');
       const patternId = parts[4];
       const guidelineId = parts[6];
-      await patternsService.deleteLayoutGuideline(patternId, guidelineId);
+      await patternsService.deleteLayoutGuideline(projectId, guidelineId);
       this.lastStatus = 204;
     }
   } catch (err: any) {
@@ -266,34 +259,22 @@ Then('the response body should match the stored pattern', function (this: MpdsWo
 
 Then('the response should contain a list of {int} patterns', function (this: MpdsWorld, count: number) {
   assert.strictEqual(
-    (this.lastResponse.data || []).length,
+    (this.lastResponse || []).length,
     count,
-    `Expected ${count} patterns, got ${(this.lastResponse.data || []).length}`
+    `Expected ${count} patterns, got ${(this.lastResponse || []).length}`
   );
-});
-
-Then('the pagination metadata should indicate:', function (this: MpdsWorld, table: DataTable) {
-  const expected = tableToObject(table);
-  const pagination = this.lastResponse.pagination;
-
-  Object.entries(expected).forEach(([key, value]) => {
-    assert.strictEqual(
-      pagination[key],
-      parseInt(value as string, 10),
-      `Expected pagination.${key} to be ${value}, got ${pagination[key]}`
-    );
-  });
 });
 
 // Given steps for setup
 Given('a pattern exists with:', async function (this: MpdsWorld, table: DataTable) {
   const data = tableToObject(table);
-  if (!data.description) data.description = 'Test pattern';
+  if (!data.id) throw new Error('id is required for each pattern');
+    if (!data.name) throw new Error('name is required for each pattern');
+    if (!data.description) data.description = 'Test pattern';
   if (!data.category) data.category = 'component';
   if (!data.version) data.version = '1.0.0';
-  if (!data.name) throw new Error('name is required');
 
-  this.lastResponse = await patternsService.createPattern(data as any);
+  this.lastResponse = await patternsService.createPattern(projectId, data as any);
   this.lastPatternId = this.lastResponse.id;
 });
 
@@ -303,11 +284,13 @@ Given('patterns exist:', async function (this: MpdsWorld, table: DataTable) {
 
   for (const patternData of patterns) {
     const data: any = { ...patternData };
+    if (!data.id) throw new Error('id is required for each pattern');
+    if (!data.name) throw new Error('name is required for each pattern');
     if (!data.description) data.description = 'Test pattern';
     if (!data.category) data.category = 'component';
     if (!data.version) data.version = '1.0.0';
 
-    const result = await patternsService.createPattern(data as any);
+    const result = await patternsService.createPattern(projectId, data as any);
     if (patternData.id) {
       this.patternMap!.set(patternData.id, result.id);
     }
@@ -318,25 +301,17 @@ Given('patterns exist:', async function (this: MpdsWorld, table: DataTable) {
 Given('the pattern has variants:', async function (this: MpdsWorld, table: DataTable) {
   const variants = table.hashes();
   for (const variant of variants) {
-    await patternsService.createVariant(this.lastPatternId!, {
+    await patternsService.createVariant(projectId, this.lastPatternId!, {
       name: variant.name,
-      props: variant.props ? JSON.parse(variant.props) : {},
+      appliesAt: variant.appliesAt || 'mobile',
     });
   }
 });
 
 Given('a variant {string} exists for the pattern', async function (this: MpdsWorld, variantName: string) {
-  await patternsService.createVariant(this.lastPatternId!, {
+  await patternsService.createVariant(projectId, this.lastPatternId!, {
     name: variantName,
-    props: {},
-  });
-});
-
-Given('a variant {string} exists with props {string}', async function (this: MpdsWorld, variantName: string, propsStr: string) {
-  const props = JSON.parse(propsStr);
-  await patternsService.createVariant(this.lastPatternId!, {
-    name: variantName,
-    props,
+    appliesAt: 'mobile',
   });
 });
 
@@ -374,28 +349,19 @@ Then('the response should contain {int} rule', function (this: MpdsWorld, count:
 
 Then('the response should contain {int} rules', function (this: MpdsWorld, count: number) {
   assert.strictEqual(
-    (this.lastResponse.data || []).length,
+    (this.lastResponse || []).length,
     count,
-    `Expected ${count} rules, got ${(this.lastResponse.data || []).length}`
-  );
-});
-
-Then('pagination metadata should indicate total of {int}', function (this: MpdsWorld, total: number) {
-  assert.strictEqual(
-    this.lastResponse.pagination.total,
-    total,
-    `Expected total ${total}, got ${this.lastResponse.pagination.total}`
+    `Expected ${count} rules, got ${(this.lastResponse || []).length}`
   );
 });
 
 Given('composition rules exist:', async function (this: MpdsWorld, table: DataTable) {
   const rules = table.hashes();
   for (const rule of rules) {
-    const response = await patternsService.createCompositionRule({
-      parent_id: this.patternMap?.get(rule.parent) || rule.parent,
-      child_id: this.patternMap?.get(rule.child) || rule.child,
-      relationship: rule.relationship || 'contains',
-      cardinality: '0..n',
+    const response = await patternsService.createCompositionRule(projectId, {
+      patternAId: this.patternMap?.get(rule.patternA) || rule.patternA,
+      patternBId: this.patternMap?.get(rule.patternB) || rule.patternB,
+      relation: rule.relation || 'NESTING_ALLOWED',
     });
     this.lastRuleId = response.id;
   }
@@ -413,9 +379,11 @@ Then('the variant props should be {string}', function (this: MpdsWorld, propsStr
 Given('layout guidelines exist:', async function (this: MpdsWorld, table: DataTable) {
   const guidelines = table.hashes();
   for (const guideline of guidelines) {
-    await patternsService.createLayoutGuideline(this.lastPatternId!, {
+    await patternsService.createLayoutGuideline(projectId, {
+      type: 'breakpoints',
       name: guideline.name,
       description: guideline.description || '',
+      data: {},
     });
   }
 });
@@ -425,16 +393,18 @@ Given('a layout guideline {string} with min_width {int} exists', async function 
   name: string,
   minWidth: number
 ) {
-  const response = await patternsService.createLayoutGuideline(this.lastPatternId!, {
+  const response = await patternsService.createLayoutGuideline(projectId, {
+    type: 'breakpoints',
     name,
-    min_width: minWidth,
+    description: '',
+    data: { minWidth },
   });
   this.lastGuidelineId = response.id;
 });
 
 Then('the pattern should no longer exist in the database', async function (this: MpdsWorld) {
   try {
-    await patternsService.getPattern(this.lastPatternId!);
+    await patternsService.getPattern(projectId, this.lastPatternId!);
     throw new Error('Pattern should not exist');
   } catch (err: any) {
     if (!(err instanceof patternsService.PatternsError)) throw err;
@@ -452,68 +422,4 @@ Then('the rule should no longer exist', function (this: MpdsWorld) {
 
 Then('the guideline should no longer exist', function (this: MpdsWorld) {
   // Verified by 204 status
-});
-
-Then('the guideline min_width should be {int}', function (this: MpdsWorld, value: number) {
-  assert.strictEqual(
-    this.lastResponse.min_width,
-    value,
-    `Expected min_width ${value}, got ${this.lastResponse.min_width}`
-  );
-});
-
-Then('the guideline should define {int} breakpoint configurations', function (this: MpdsWorld, count: number) {
-  assert.ok(
-    this.lastResponse.breakpoints && this.lastResponse.breakpoints.length === count,
-    `Expected ${count} breakpoint configurations, got ${this.lastResponse.breakpoints?.length || 0}`
-  );
-});
-
-Then('the guideline should enforce z-index stacking order', function (this: MpdsWorld) {
-  assert.ok(this.lastResponse.z_index, 'z_index should be defined');
-  assert.ok(this.lastResponse.above, 'above should be defined');
-});
-
-Then('the validation result should indicate {string}', function (this: MpdsWorld, status: string) {
-  assert.strictEqual(
-    this.lastResponse.status,
-    status,
-    `Expected validation status ${status}, got ${this.lastResponse.status}`
-  );
-});
-
-Then('the batch result should indicate:', function (this: MpdsWorld, table: DataTable) {
-  const expected = table.hashes();
-  const results = this.lastResponse.results;
-
-  expected.forEach((exp: any, idx: number) => {
-    const result = results[idx];
-    const expectedValid = exp.valid === 'true' || exp.valid === true;
-    assert.strictEqual(
-      result.valid,
-      expectedValid,
-      `Expected result ${idx} valid=${expectedValid}, got ${result.valid}`
-    );
-  });
-});
-
-Then('item {int} should have error {string}', function (this: MpdsWorld, index: number, errorMsg: string) {
-  const result = this.lastResponse.results[index];
-  assert.ok(result.error, `Expected error for item ${index}`);
-  assert.ok(
-    result.error.includes(errorMsg),
-    `Expected error to include "${errorMsg}", got: ${result.error}`
-  );
-});
-
-Then('warnings should include:', function (this: MpdsWorld, table: DataTable) {
-  const expected = table.hashes().map((h) => h.warning);
-  const warnings = this.lastResponse.warnings;
-
-  expected.forEach((exp: string) => {
-    assert.ok(
-      warnings.some((w: any) => w.includes(exp)),
-      `Expected warning to include "${exp}"`
-    );
-  });
 });

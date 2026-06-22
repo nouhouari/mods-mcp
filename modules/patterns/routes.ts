@@ -1,5 +1,5 @@
 // This module provides route handlers for the patterns API.
-// These are exported as functions that can be integrated into the mcp-server request handler.
+// Routes follow the contract: /api/projects/{projectId}/patterns, /api/projects/{projectId}/composition-rules, etc.
 
 import * as http from 'http';
 import * as patternsService from './index';
@@ -44,249 +44,23 @@ export async function handlePatternRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse
 ): Promise<boolean> {
-  // POST /api/v1/patterns
-  if (method === 'POST' && urlStr === '/api/v1/patterns') {
+  // GET /api/projects/{projectId}/patterns (list patterns)
+  const listMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns(\/.*)?$/);
+  if (method === 'GET' && listMatch && !listMatch[2]) {
     try {
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.createPattern(payload);
-      sendJson(res, 201, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 400, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // GET /api/v1/patterns (with optional query params)
-  if (method === 'GET' && urlStr.startsWith('/api/v1/patterns')) {
-    // Check if this is a pattern ID fetch or a list
-    const patternMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)(\/.*)?$/);
-    if (patternMatch) {
-      // This is handled by pattern-specific routes below
-      return false;
-    }
-
-    // This is a list request
-    if (urlStr === '/api/v1/patterns' || urlStr.startsWith('/api/v1/patterns?')) {
-      try {
-        const qs = new URLSearchParams(urlStr.includes('?') ? urlStr.split('?')[1] : '');
-        const limit = qs.get('limit') ? parseInt(qs.get('limit')!, 10) : undefined;
-        const offset = qs.get('offset') ? parseInt(qs.get('offset')!, 10) : undefined;
-        const category = qs.get('category') ?? undefined;
-
-        const result = await patternsService.listPatterns({ limit, offset, category });
-        sendJson(res, 200, result);
-      } catch (err: any) {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-      return true;
-    }
-  }
-
-  // GET /api/v1/patterns/:patternId
-  const patternGetMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)$/);
-  if (method === 'GET' && patternGetMatch) {
-    try {
-      const patternId = decodeURIComponent(patternGetMatch[1]);
-      const result = await patternsService.getPattern(patternId);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // PATCH /api/v1/patterns/:patternId
-  const patternPatchMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)$/);
-  if (method === 'PATCH' && patternPatchMatch) {
-    try {
-      const patternId = decodeURIComponent(patternPatchMatch[1]);
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.updatePattern(patternId, payload);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // DELETE /api/v1/patterns/:patternId
-  const patternDeleteMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)$/);
-  if (method === 'DELETE' && patternDeleteMatch) {
-    try {
-      const patternId = decodeURIComponent(patternDeleteMatch[1]);
-      await patternsService.deletePattern(patternId);
-      res.writeHead(204);
-      res.end();
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // POST /api/v1/patterns/:patternId/variants
-  const variantCreateMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/variants$/);
-  if (method === 'POST' && variantCreateMatch) {
-    try {
-      const patternId = decodeURIComponent(variantCreateMatch[1]);
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.createVariant(patternId, payload);
-      sendJson(res, 201, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        const status = err.code === 'PATTERN_NOT_FOUND' ? 404 : 400;
-        sendError(res, status, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // GET /api/v1/patterns/:patternId/variants
-  const variantListMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/variants$/);
-  if (method === 'GET' && variantListMatch) {
-    try {
-      const patternId = decodeURIComponent(variantListMatch[1]);
-      const result = await patternsService.listVariants(patternId);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // GET /api/v1/patterns/:patternId/variants/:variantName
-  const variantGetMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/variants\/([^/?]+)$/);
-  if (method === 'GET' && variantGetMatch) {
-    try {
-      const patternId = decodeURIComponent(variantGetMatch[1]);
-      const variantName = decodeURIComponent(variantGetMatch[2]);
-      const result = await patternsService.getVariant(patternId, variantName);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // PATCH /api/v1/patterns/:patternId/variants/:variantName
-  if (method === 'PATCH' && variantGetMatch) {
-    try {
-      const patternId = decodeURIComponent(variantGetMatch[1]);
-      const variantName = decodeURIComponent(variantGetMatch[2]);
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.updateVariant(patternId, variantName, payload);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // DELETE /api/v1/patterns/:patternId/variants/:variantName
-  if (method === 'DELETE' && variantGetMatch) {
-    try {
-      const patternId = decodeURIComponent(variantGetMatch[1]);
-      const variantName = decodeURIComponent(variantGetMatch[2]);
-      await patternsService.deleteVariant(patternId, variantName);
-      res.writeHead(204);
-      res.end();
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // POST /api/v1/composition-rules
-  if (method === 'POST' && urlStr === '/api/v1/composition-rules') {
-    try {
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.createCompositionRule(payload);
-      sendJson(res, 201, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        const status = err.code === 'PATTERN_NOT_FOUND' ? 404 : 400;
-        sendError(res, status, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // GET /api/v1/composition-rules
-  if (method === 'GET' && (urlStr === '/api/v1/composition-rules' || urlStr.startsWith('/api/v1/composition-rules?'))) {
-    try {
+      const projectId = decodeURIComponent(listMatch[1]);
       const qs = new URLSearchParams(urlStr.includes('?') ? urlStr.split('?')[1] : '');
       const limit = qs.get('limit') ? parseInt(qs.get('limit')!, 10) : undefined;
       const offset = qs.get('offset') ? parseInt(qs.get('offset')!, 10) : undefined;
-      const result = await patternsService.listCompositionRules({ limit, offset });
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      console.error('Unexpected error:', err);
-      sendError(res, 500, 'INTERNAL_ERROR', err.message);
-    }
-    return true;
-  }
+      const category = qs.get('category') ?? undefined;
+      const tag = qs.get('tag') ?? undefined;
 
-  // GET /api/v1/patterns/:patternId/composition-rules
-  const compositionListMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/composition-rules$/);
-  if (method === 'GET' && compositionListMatch) {
-    try {
-      const patternId = decodeURIComponent(compositionListMatch[1]);
-      const result = await patternsService.getCompositionRules(patternId);
+      const result = await patternsService.listPatterns(projectId, { limit, offset, category, tag });
       sendJson(res, 200, result);
     } catch (err: any) {
       if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
+        const status = err.code === 'PATTERN_NOT_FOUND' ? 404 : 400;
+        sendError(res, status, err.code, err.message);
       } else {
         console.error('Unexpected error:', err);
         sendError(res, 500, 'INTERNAL_ERROR', err.message);
@@ -295,33 +69,13 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  // DELETE /api/v1/composition-rules/:ruleId
-  const ruleDeleteMatch = urlStr.match(/^\/api\/v1\/composition-rules\/([^/?]+)$/);
-  if (method === 'DELETE' && ruleDeleteMatch) {
+  // POST /api/projects/{projectId}/patterns (create pattern)
+  if (method === 'POST' && listMatch && !listMatch[2]) {
     try {
-      const ruleId = decodeURIComponent(ruleDeleteMatch[1]);
-      await patternsService.deleteCompositionRule(ruleId);
-      res.writeHead(204);
-      res.end();
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // POST /api/v1/patterns/:patternId/layout-guidelines
-  const guidelineCreateMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/layout-guidelines$/);
-  if (method === 'POST' && guidelineCreateMatch) {
-    try {
-      const patternId = decodeURIComponent(guidelineCreateMatch[1]);
+      const projectId = decodeURIComponent(listMatch[1]);
       const body = await readBody(req);
       const payload = JSON.parse(body);
-      const result = await patternsService.createLayoutGuideline(patternId, payload);
+      const result = await patternsService.createPattern(projectId, payload);
       sendJson(res, 201, result);
     } catch (err: any) {
       if (err instanceof patternsService.PatternsError) {
@@ -335,12 +89,13 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  // GET /api/v1/patterns/:patternId/layout-guidelines
-  const guidelineListMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/layout-guidelines$/);
-  if (method === 'GET' && guidelineListMatch) {
+  // GET /api/projects/{projectId}/patterns/{patternId} (get pattern)
+  const getPatternMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns\/([^/?]+)$/);
+  if (method === 'GET' && getPatternMatch) {
     try {
-      const patternId = decodeURIComponent(guidelineListMatch[1]);
-      const result = await patternsService.listLayoutGuidelines(patternId);
+      const projectId = decodeURIComponent(getPatternMatch[1]);
+      const patternId = decodeURIComponent(getPatternMatch[2]);
+      const result = await patternsService.getPattern(projectId, patternId);
       sendJson(res, 200, result);
     } catch (err: any) {
       if (err instanceof patternsService.PatternsError) {
@@ -353,33 +108,14 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  // GET /api/v1/patterns/:patternId/layout-guidelines/:guidelineId
-  const guidelineGetMatch = urlStr.match(/^\/api\/v1\/patterns\/([^/?]+)\/layout-guidelines\/([^/?]+)$/);
-  if (method === 'GET' && guidelineGetMatch) {
+  // PATCH /api/projects/{projectId}/patterns/{patternId} (update pattern)
+  if (method === 'PATCH' && getPatternMatch) {
     try {
-      const patternId = decodeURIComponent(guidelineGetMatch[1]);
-      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
-      const result = await patternsService.getLayoutGuideline(patternId, guidelineId);
-      sendJson(res, 200, result);
-    } catch (err: any) {
-      if (err instanceof patternsService.PatternsError) {
-        sendError(res, 404, err.code, err.message);
-      } else {
-        console.error('Unexpected error:', err);
-        sendError(res, 500, 'INTERNAL_ERROR', err.message);
-      }
-    }
-    return true;
-  }
-
-  // PATCH /api/v1/patterns/:patternId/layout-guidelines/:guidelineId
-  if (method === 'PATCH' && guidelineGetMatch) {
-    try {
-      const patternId = decodeURIComponent(guidelineGetMatch[1]);
-      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
+      const projectId = decodeURIComponent(getPatternMatch[1]);
+      const patternId = decodeURIComponent(getPatternMatch[2]);
       const body = await readBody(req);
       const payload = JSON.parse(body);
-      const result = await patternsService.updateLayoutGuideline(patternId, guidelineId, payload);
+      const result = await patternsService.updatePattern(projectId, patternId, payload);
       sendJson(res, 200, result);
     } catch (err: any) {
       if (err instanceof patternsService.PatternsError) {
@@ -392,12 +128,12 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  // DELETE /api/v1/patterns/:patternId/layout-guidelines/:guidelineId
-  if (method === 'DELETE' && guidelineGetMatch) {
+  // DELETE /api/projects/{projectId}/patterns/{patternId} (delete pattern)
+  if (method === 'DELETE' && getPatternMatch) {
     try {
-      const patternId = decodeURIComponent(guidelineGetMatch[1]);
-      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
-      await patternsService.deleteLayoutGuideline(patternId, guidelineId);
+      const projectId = decodeURIComponent(getPatternMatch[1]);
+      const patternId = decodeURIComponent(getPatternMatch[2]);
+      await patternsService.deletePattern(projectId, patternId);
       res.writeHead(204);
       res.end();
     } catch (err: any) {
@@ -411,40 +147,138 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  // POST /api/v1/patterns/validate
-  if (method === 'POST' && urlStr === '/api/v1/patterns/validate') {
+  // POST /api/projects/{projectId}/patterns/{patternId}/variants (create variant)
+  const variantCreateMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns\/([^/?]+)\/variants$/);
+  if (method === 'POST' && variantCreateMatch) {
     try {
+      const projectId = decodeURIComponent(variantCreateMatch[1]);
+      const patternId = decodeURIComponent(variantCreateMatch[2]);
       const body = await readBody(req);
       const payload = JSON.parse(body);
-      const result = await patternsService.validatePattern(payload);
-      sendJson(res, result.status === 'valid' ? 200 : 400, result);
+      const result = await patternsService.createVariant(projectId, patternId, payload);
+      sendJson(res, 201, result);
     } catch (err: any) {
-      console.error('Unexpected error:', err);
-      sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      if (err instanceof patternsService.PatternsError) {
+        const status = err.code === 'PATTERN_NOT_FOUND' ? 404 : 400;
+        sendError(res, status, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
     }
     return true;
   }
 
-  // POST /api/v1/patterns/batch-validate
-  if (method === 'POST' && urlStr === '/api/v1/patterns/batch-validate') {
+  // GET /api/projects/{projectId}/patterns/{patternId}/variants (list variants)
+  const variantListMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns\/([^/?]+)\/variants$/);
+  if (method === 'GET' && variantListMatch) {
     try {
-      const body = await readBody(req);
-      const payload = JSON.parse(body);
-      const result = await patternsService.validatePatternBatch(payload);
-      sendJson(res, 207, result);
+      const projectId = decodeURIComponent(variantListMatch[1]);
+      const patternId = decodeURIComponent(variantListMatch[2]);
+      const result = await patternsService.listVariants(projectId, patternId);
+      sendJson(res, 200, result);
     } catch (err: any) {
-      console.error('Unexpected error:', err);
-      sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
     }
     return true;
   }
 
-  // POST /api/v1/patterns/lint
-  if (method === 'POST' && urlStr === '/api/v1/patterns/lint') {
+  // GET /api/projects/{projectId}/patterns/{patternId}/variants/{variantId} (get variant)
+  const variantGetMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns\/([^/?]+)\/variants\/([^/?]+)$/);
+  if (method === 'GET' && variantGetMatch) {
     try {
+      const projectId = decodeURIComponent(variantGetMatch[1]);
+      const patternId = decodeURIComponent(variantGetMatch[2]);
+      const variantId = decodeURIComponent(variantGetMatch[3]);
+      const result = await patternsService.getVariant(projectId, patternId, variantId);
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // PATCH /api/projects/{projectId}/patterns/{patternId}/variants/{variantId} (update variant)
+  if (method === 'PATCH' && variantGetMatch) {
+    try {
+      const projectId = decodeURIComponent(variantGetMatch[1]);
+      const patternId = decodeURIComponent(variantGetMatch[2]);
+      const variantId = decodeURIComponent(variantGetMatch[3]);
       const body = await readBody(req);
       const payload = JSON.parse(body);
-      const result = await patternsService.lintPattern(payload);
+      const result = await patternsService.updateVariant(projectId, patternId, variantId, payload);
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // DELETE /api/projects/{projectId}/patterns/{patternId}/variants/{variantId} (delete variant)
+  if (method === 'DELETE' && variantGetMatch) {
+    try {
+      const projectId = decodeURIComponent(variantGetMatch[1]);
+      const patternId = decodeURIComponent(variantGetMatch[2]);
+      const variantId = decodeURIComponent(variantGetMatch[3]);
+      await patternsService.deleteVariant(projectId, patternId, variantId);
+      res.writeHead(204);
+      res.end();
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // POST /api/projects/{projectId}/composition-rules (create composition rule)
+  const compositionCreateMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/composition-rules$/);
+  if (method === 'POST' && compositionCreateMatch) {
+    try {
+      const projectId = decodeURIComponent(compositionCreateMatch[1]);
+      const body = await readBody(req);
+      const payload = JSON.parse(body);
+      const result = await patternsService.createCompositionRule(projectId, payload);
+      sendJson(res, 201, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        const status = err.code === 'PATTERN_NOT_FOUND' ? 404 : 400;
+        sendError(res, status, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // GET /api/projects/{projectId}/composition-rules (list composition rules)
+  const compositionListMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/composition-rules(\/.*)?$/);
+  if (method === 'GET' && compositionListMatch && !compositionListMatch[2]) {
+    try {
+      const projectId = decodeURIComponent(compositionListMatch[1]);
+      const qs = new URLSearchParams(urlStr.includes('?') ? urlStr.split('?')[1] : '');
+      const limit = qs.get('limit') ? parseInt(qs.get('limit')!, 10) : undefined;
+      const offset = qs.get('offset') ? parseInt(qs.get('offset')!, 10) : undefined;
+      const result = await patternsService.listCompositionRules(projectId, { limit, offset });
       sendJson(res, 200, result);
     } catch (err: any) {
       console.error('Unexpected error:', err);
@@ -453,5 +287,140 @@ export async function handlePatternRoutes(
     return true;
   }
 
-  return false; // Not a patterns route
+  // DELETE /api/projects/{projectId}/composition-rules/{ruleId} (delete composition rule)
+  const ruleDeleteMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/composition-rules\/([^/?]+)$/);
+  if (method === 'DELETE' && ruleDeleteMatch) {
+    try {
+      const projectId = decodeURIComponent(ruleDeleteMatch[1]);
+      const ruleId = decodeURIComponent(ruleDeleteMatch[2]);
+      await patternsService.deleteCompositionRule(projectId, ruleId);
+      res.writeHead(204);
+      res.end();
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // GET /api/projects/{projectId}/patterns/{patternId}/composition-rules (get composition rules for pattern)
+  const compositionGetMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/patterns\/([^/?]+)\/composition-rules$/);
+  if (method === 'GET' && compositionGetMatch) {
+    try {
+      const projectId = decodeURIComponent(compositionGetMatch[1]);
+      const patternId = decodeURIComponent(compositionGetMatch[2]);
+      const result = await patternsService.getCompositionRules(projectId, patternId);
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // POST /api/projects/{projectId}/layout-guidelines (create layout guideline)
+  const guidelineCreateMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/layout-guidelines$/);
+  if (method === 'POST' && guidelineCreateMatch) {
+    try {
+      const projectId = decodeURIComponent(guidelineCreateMatch[1]);
+      const body = await readBody(req);
+      const payload = JSON.parse(body);
+      const result = await patternsService.createLayoutGuideline(projectId, payload);
+      sendJson(res, 201, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        const status = err.code === 'GUIDELINE_NOT_FOUND' ? 404 : 400;
+        sendError(res, status, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // GET /api/projects/{projectId}/layout-guidelines (list layout guidelines)
+  const guidelineListMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/layout-guidelines(\/.*)?$/);
+  if (method === 'GET' && guidelineListMatch && !guidelineListMatch[2]) {
+    try {
+      const projectId = decodeURIComponent(guidelineListMatch[1]);
+      const qs = new URLSearchParams(urlStr.includes('?') ? urlStr.split('?')[1] : '');
+      const limit = qs.get('limit') ? parseInt(qs.get('limit')!, 10) : undefined;
+      const offset = qs.get('offset') ? parseInt(qs.get('offset')!, 10) : undefined;
+      const result = await patternsService.listLayoutGuidelines(projectId, { limit, offset });
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      console.error('Unexpected error:', err);
+      sendError(res, 500, 'INTERNAL_ERROR', err.message);
+    }
+    return true;
+  }
+
+  // GET /api/projects/{projectId}/layout-guidelines/{guidelineId} (get layout guideline)
+  const guidelineGetMatch = urlStr.match(/^\/api\/projects\/([^/?]+)\/layout-guidelines\/([^/?]+)$/);
+  if (method === 'GET' && guidelineGetMatch) {
+    try {
+      const projectId = decodeURIComponent(guidelineGetMatch[1]);
+      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
+      const result = await patternsService.getLayoutGuideline(projectId, guidelineId);
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // PATCH /api/projects/{projectId}/layout-guidelines/{guidelineId} (update layout guideline)
+  if (method === 'PATCH' && guidelineGetMatch) {
+    try {
+      const projectId = decodeURIComponent(guidelineGetMatch[1]);
+      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
+      const body = await readBody(req);
+      const payload = JSON.parse(body);
+      const result = await patternsService.updateLayoutGuideline(projectId, guidelineId, payload);
+      sendJson(res, 200, result);
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  // DELETE /api/projects/{projectId}/layout-guidelines/{guidelineId} (delete layout guideline)
+  if (method === 'DELETE' && guidelineGetMatch) {
+    try {
+      const projectId = decodeURIComponent(guidelineGetMatch[1]);
+      const guidelineId = decodeURIComponent(guidelineGetMatch[2]);
+      await patternsService.deleteLayoutGuideline(projectId, guidelineId);
+      res.writeHead(204);
+      res.end();
+    } catch (err: any) {
+      if (err instanceof patternsService.PatternsError) {
+        sendError(res, 404, err.code, err.message);
+      } else {
+        console.error('Unexpected error:', err);
+        sendError(res, 500, 'INTERNAL_ERROR', err.message);
+      }
+    }
+    return true;
+  }
+
+  return false;
 }
