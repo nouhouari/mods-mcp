@@ -1,0 +1,15 @@
+id: REQ-005
+title: Pattern Validation
+description: All P2 create operations must enforce field validation, enum
+  enforcement, and format checking. Invalid input must return HTTP 400 with a
+  structured error code.
+source: REQ-P2-005
+priority: high
+components: []
+tags:
+  - P2
+  - validation
+  - error-handling
+status: active
+createdAt: 2026-06-22T02:54:31.739Z
+updatedAt: 2026-06-22T02:54:31.739Z

@@ -1,0 +1,21 @@
+id: US-005
+title: Validate Pattern Integrity
+description: As an API consumer, I want all P2 create operations to validate my
+  input immediately so that I receive clear, actionable error messages for bad
+  requests rather than silent failures or 500 errors.
+requirements:
+  - REQ-005
+acceptanceCriteria:
+  - id: AC-1
+    text: A request referencing a non-existent or malformed ID returns HTTP 400 with
+      a machine-readable error code.
+  - id: AC-2
+    text: A request missing required fields returns HTTP 400 with a descriptive
+      error body identifying the missing fields.
+  - id: AC-3
+    text: A request supplying an invalid enum value (e.g., bad relation type or
+      guideline type) returns HTTP 400 with a descriptive error body identifying
+      the bad value.
+status: draft
+createdAt: 2026-06-22T02:54:54.784Z
+updatedAt: 2026-06-22T02:54:54.784Z

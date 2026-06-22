@@ -1,0 +1,21 @@
+id: US-001
+title: Manage Design Patterns
+description: As a design-system consumer, I want to create, retrieve, update,
+  and delete design patterns scoped to my project so that I can maintain a
+  versioned library of reusable UI patterns.
+requirements:
+  - REQ-001
+acceptanceCriteria:
+  - id: AC-1
+    text: CRUD operations (POST /patterns, GET /patterns, GET /patterns/:id, PUT
+      /patterns/:id, DELETE /patterns/:id) all return correct HTTP status codes
+      and JSON bodies.
+  - id: AC-2
+    text: List endpoint returns a paginated envelope with total, limit, and offset
+      fields alongside the items array.
+  - id: AC-3
+    text: Patterns are scoped to the requesting project and cannot be accessed by
+      other projects.
+status: draft
+createdAt: 2026-06-22T02:54:43.675Z
+updatedAt: 2026-06-22T02:54:43.675Z

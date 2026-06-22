@@ -3,9 +3,16 @@ import * as assert from 'assert';
 import { MpdsWorld } from '../support/world';
 import * as patternsService from '../modules/patterns/index';
 
+// Module augmentation to add lastVariantId to MpdsWorld
+declare module '../support/world' {
+  interface MpdsWorld {
+    lastVariantId: string | null;
+  }
+}
+
 /**
  * Patterns API Step Definitions
- * 
+ *
  * These steps test the patterns service functions directly,
  * following the same pattern as other services (tokens, components).
  */
@@ -17,11 +24,30 @@ const projectId = 'test-project';
 // ============================================================================
 
 function tableToObject(table: DataTable): Record<string, any> {
+  const raw = table.raw();
+  const headers = raw[0] || [];
+
+  // Handle the special field|value two-column format where each row is a key-value pair.
+  if (headers.length === 2 && headers[0] === 'field' && headers[1] === 'value') {
+    const obj: Record<string, any> = {};
+    table.hashes().forEach((row) => {
+      const key = row['field'];
+      const val = row['value'];
+      try {
+        obj[key] = JSON.parse(val);
+      } catch {
+        obj[key] = val;
+      }
+    });
+    return obj;
+  }
+
+  // General multi-column format: merge all rows into a single object (later rows overwrite earlier).
   const obj: Record<string, any> = {};
   table.hashes().forEach((row) => {
     Object.entries(row).forEach(([key, value]) => {
       try {
-        obj[key] = JSON.parse(value);
+        obj[key] = JSON.parse(value as string);
       } catch {
         obj[key] = value;
       }
@@ -56,14 +82,19 @@ When('I POST to {string} with:', async function (this: MpdsWorld, endpoint: stri
       this.lastPatternId = this.lastResponse.id;
     } else if (endpoint.includes('/variants') && endpoint.includes('{pattern_id}')) {
       const patternId = this.lastPatternId;
-      this.lastResponse = await patternsService.createVariant(projectId, patternId!, data as any);
+      const variant = await patternsService.createVariant(projectId, patternId!, data as any);
+      this.lastResponse = variant;
       this.lastStatus = 201;
+      this.lastVariantId = variant.id;
     } else if (endpoint === '/api/v1/composition-rules') {
       this.lastResponse = await patternsService.createCompositionRule(projectId, data as any);
       this.lastStatus = 201;
       this.lastRuleId = this.lastResponse.id;
+    } else if (endpoint === '/api/v1/layout-guidelines') {
+      this.lastResponse = await patternsService.createLayoutGuideline(projectId, data as any);
+      this.lastStatus = 201;
+      this.lastGuidelineId = this.lastResponse.id;
     } else if (endpoint.includes('/layout-guidelines') && endpoint.includes('{pattern_id}')) {
-      const patternId = this.lastPatternId;
       this.lastResponse = await patternsService.createLayoutGuideline(projectId, data as any);
       this.lastStatus = 201;
     }
@@ -85,10 +116,14 @@ When('I GET {string}', async function (this: MpdsWorld, endpoint: string) {
   try {
     const resolvedEndpoint = endpoint
       .replace('{pattern_id}', this.lastPatternId || '')
-      .replace('{rule_id}', this.lastRuleId || '');
+      .replace('{rule_id}', this.lastRuleId || '')
+      .replace('{variant_id}', this.lastVariantId || '')
+      .replace('{guideline_id}', this.lastGuidelineId || '');
 
     if (resolvedEndpoint === '/api/v1/patterns' || resolvedEndpoint.startsWith('/api/v1/patterns?')) {
-      this.lastResponse = await patternsService.listPatterns(projectId, {});
+      const response = await patternsService.listPatterns(projectId, {});
+      this.lastResult = response;
+      this.lastResponse = response.patterns || [];
       this.lastStatus = 200;
     } else if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/composition') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
@@ -107,17 +142,22 @@ When('I GET {string}', async function (this: MpdsWorld, endpoint: string) {
     } else if (resolvedEndpoint === '/api/v1/composition-rules' || resolvedEndpoint.startsWith('/api/v1/composition-rules?')) {
       this.lastResponse = await patternsService.listCompositionRules(projectId, {});
       this.lastStatus = 200;
-    } else if (resolvedEndpoint.includes('/composition-rules') && !resolvedEndpoint.endsWith('/composition-rules')) {
+    } else if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+\/composition-rules$/)) {
+      // Pattern-scoped: GET /api/v1/patterns/{pattern_id}/composition-rules
       const patternId = resolvedEndpoint.split('/')[4];
       this.lastResponse = await patternsService.getCompositionRules(projectId, patternId);
       this.lastStatus = 200;
-    } else if (resolvedEndpoint.includes('/layout-guidelines') && !resolvedEndpoint.split('/layout-guidelines')[1]) {
-      const patternId = resolvedEndpoint.split('/')[4];
+    } else if (resolvedEndpoint === '/api/v1/layout-guidelines' || (resolvedEndpoint.includes('/layout-guidelines') && !resolvedEndpoint.split('/layout-guidelines')[1])) {
       this.lastResponse = await patternsService.listLayoutGuidelines(projectId, {});
       this.lastStatus = 200;
+    } else if (resolvedEndpoint.match(/^\/api\/v1\/layout-guidelines\/[^/]+$/)) {
+      // Project-scoped: /api/v1/layout-guidelines/{guideline_id}
+      const guidelineId = resolvedEndpoint.split('/')[4];
+      this.lastResponse = await patternsService.getLayoutGuideline(projectId, guidelineId);
+      this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
+      // Pattern-scoped: /api/v1/patterns/{pattern_id}/layout-guidelines/{guideline_id}
       const parts = resolvedEndpoint.split('/');
-      const patternId = parts[4];
       const guidelineId = parts[6];
       this.lastResponse = await patternsService.getLayoutGuideline(projectId, guidelineId);
       this.lastStatus = 200;
@@ -140,7 +180,9 @@ When('I PATCH {string} with:', async function (this: MpdsWorld, endpoint: string
   try {
     const resolvedEndpoint = endpoint
       .replace('{pattern_id}', this.lastPatternId || '')
-      .replace('{rule_id}', this.lastRuleId || '');
+      .replace('{rule_id}', this.lastRuleId || '')
+      .replace('{variant_id}', this.lastVariantId || '')
+      .replace('{guideline_id}', this.lastGuidelineId || '');
 
     if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
@@ -152,9 +194,14 @@ When('I PATCH {string} with:', async function (this: MpdsWorld, endpoint: string
       const variantId = parts[6];
       this.lastResponse = await patternsService.updateVariant(projectId, patternId, variantId, data);
       this.lastStatus = 200;
+    } else if (resolvedEndpoint.match(/^\/api\/v1\/layout-guidelines\/[^/]+$/)) {
+      // Project-scoped: /api/v1/layout-guidelines/{guideline_id}
+      const guidelineId = resolvedEndpoint.split('/')[4];
+      this.lastResponse = await patternsService.updateLayoutGuideline(projectId, guidelineId, data);
+      this.lastStatus = 200;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
+      // Pattern-scoped: /api/v1/patterns/{pattern_id}/layout-guidelines/{guideline_id}
       const parts = resolvedEndpoint.split('/');
-      const patternId = parts[4];
       const guidelineId = parts[6];
       this.lastResponse = await patternsService.updateLayoutGuideline(projectId, guidelineId, data);
       this.lastStatus = 200;
@@ -175,7 +222,9 @@ When('I DELETE {string}', async function (this: MpdsWorld, endpoint: string) {
   try {
     const resolvedEndpoint = endpoint
       .replace('{pattern_id}', this.lastPatternId || '')
-      .replace('{rule_id}', this.lastRuleId || '');
+      .replace('{rule_id}', this.lastRuleId || '')
+      .replace('{variant_id}', this.lastVariantId || '')
+      .replace('{guideline_id}', this.lastGuidelineId || '');
 
     if (resolvedEndpoint.match(/^\/api\/v1\/patterns\/[^/]+$/) && !resolvedEndpoint.includes('/variants') && !resolvedEndpoint.includes('/composition') && !resolvedEndpoint.includes('/layout')) {
       const patternId = resolvedEndpoint.split('/')[4];
@@ -191,9 +240,14 @@ When('I DELETE {string}', async function (this: MpdsWorld, endpoint: string) {
       const ruleId = resolvedEndpoint.split('/')[4];
       await patternsService.deleteCompositionRule(projectId, ruleId);
       this.lastStatus = 204;
+    } else if (resolvedEndpoint.match(/^\/api\/v1\/layout-guidelines\/[^/]+$/)) {
+      // Project-scoped: /api/v1/layout-guidelines/{guideline_id}
+      const guidelineId = resolvedEndpoint.split('/')[4];
+      await patternsService.deleteLayoutGuideline(projectId, guidelineId);
+      this.lastStatus = 204;
     } else if (resolvedEndpoint.includes('/layout-guidelines/')) {
+      // Pattern-scoped: /api/v1/patterns/{pattern_id}/layout-guidelines/{guideline_id}
       const parts = resolvedEndpoint.split('/');
-      const patternId = parts[4];
       const guidelineId = parts[6];
       await patternsService.deleteLayoutGuideline(projectId, guidelineId);
       this.lastStatus = 204;
@@ -258,10 +312,13 @@ Then('the response body should match the stored pattern', function (this: MpdsWo
 });
 
 Then('the response should contain a list of {int} patterns', function (this: MpdsWorld, count: number) {
+  const list = Array.isArray(this.lastResponse)
+    ? this.lastResponse
+    : (this.lastResponse?.patterns ?? []);
   assert.strictEqual(
-    (this.lastResponse || []).length,
+    list.length,
     count,
-    `Expected ${count} patterns, got ${(this.lastResponse || []).length}`
+    `Expected ${count} patterns, got ${list.length}`
   );
 });
 
@@ -276,6 +333,27 @@ Given('a pattern exists with:', async function (this: MpdsWorld, table: DataTabl
 
   this.lastResponse = await patternsService.createPattern(projectId, data as any);
   this.lastPatternId = this.lastResponse.id;
+});
+
+Given('a pattern exists with name {string}', async function (this: MpdsWorld, name: string) {
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const result = await patternsService.createPattern(projectId, {
+    id,
+    name,
+    category: 'component',
+    description: 'Test pattern',
+  });
+  this.lastPatternId = result.id;
+});
+
+Given('a pattern exists with id {string} and name {string}', async function (this: MpdsWorld, id: string, name: string) {
+  const result = await patternsService.createPattern(projectId, {
+    id,
+    name,
+    category: 'component',
+    description: 'Test pattern',
+  });
+  this.lastPatternId = result.id;
 });
 
 Given('patterns exist:', async function (this: MpdsWorld, table: DataTable) {
@@ -309,10 +387,11 @@ Given('the pattern has variants:', async function (this: MpdsWorld, table: DataT
 });
 
 Given('a variant {string} exists for the pattern', async function (this: MpdsWorld, variantName: string) {
-  await patternsService.createVariant(projectId, this.lastPatternId!, {
+  const result = await patternsService.createVariant(projectId, this.lastPatternId!, {
     name: variantName,
     appliesAt: 'mobile',
   });
+  this.lastVariantId = result.id;
 });
 
 Then('the response should contain {int} variant objects', function (this: MpdsWorld, count: number) {
@@ -324,44 +403,75 @@ Then('the response should contain {int} variant objects', function (this: MpdsWo
 });
 
 Then('the response should contain {int} composition rules', function (this: MpdsWorld, count: number) {
+  const list = Array.isArray(this.lastResponse)
+    ? this.lastResponse
+    : (this.lastResponse?.compositionRules ?? []);
   assert.strictEqual(
-    (this.lastResponse || []).length,
+    list.length,
     count,
-    `Expected ${count} rules, got ${(this.lastResponse || []).length}`
+    `Expected ${count} rules, got ${list.length}`
   );
 });
 
 Then('the response should contain {int} guideline objects', function (this: MpdsWorld, count: number) {
+  const list = Array.isArray(this.lastResponse)
+    ? this.lastResponse
+    : (this.lastResponse?.guidelines ?? []);
   assert.strictEqual(
-    (this.lastResponse || []).length,
+    list.length,
     count,
-    `Expected ${count} guidelines, got ${(this.lastResponse || []).length}`
+    `Expected ${count} guidelines, got ${list.length}`
   );
 });
 
 Then('the response should contain {int} rule', function (this: MpdsWorld, count: number) {
+  const list = Array.isArray(this.lastResponse)
+    ? this.lastResponse
+    : (this.lastResponse?.compositionRules ?? []);
   assert.strictEqual(
-    (this.lastResponse || []).length,
+    list.length,
     count,
-    `Expected ${count} rules, got ${(this.lastResponse || []).length}`
+    `Expected ${count} rules, got ${list.length}`
   );
 });
 
 Then('the response should contain {int} rules', function (this: MpdsWorld, count: number) {
+  const list = Array.isArray(this.lastResponse)
+    ? this.lastResponse
+    : (this.lastResponse?.compositionRules ?? []);
   assert.strictEqual(
-    (this.lastResponse || []).length,
+    list.length,
     count,
-    `Expected ${count} rules, got ${(this.lastResponse || []).length}`
+    `Expected ${count} rules, got ${list.length}`
   );
 });
 
 Given('composition rules exist:', async function (this: MpdsWorld, table: DataTable) {
+  const RELATION_MAP: Record<string, string> = {
+    contains: 'NESTING_ALLOWED',
+    excludes: 'NESTING_FORBIDDEN',
+  };
+  const VALID_RELATIONS = ['NESTING_ALLOWED', 'NESTING_FORBIDDEN', 'OVERRIDE_CAUTION', 'SIBLING_ONLY', 'EXCLUSIVE'];
+
   const rules = table.hashes();
   for (const rule of rules) {
+    const patternAId = rule.patternAId || rule.patternA || rule.parent;
+    const patternBId = rule.patternBId || rule.patternB || rule.child;
+    let relation = (rule.relation || rule.relationship || 'NESTING_ALLOWED').toUpperCase();
+
+    // Map friendly names to enum values
+    if (!VALID_RELATIONS.includes(relation)) {
+      const lower = relation.toLowerCase();
+      relation = RELATION_MAP[lower] || 'NESTING_ALLOWED';
+    }
+
+    const resolvedA = this.patternMap?.get(patternAId) || patternAId;
+    const resolvedB = this.patternMap?.get(patternBId) || patternBId;
+
     const response = await patternsService.createCompositionRule(projectId, {
-      patternAId: this.patternMap?.get(rule.patternA) || rule.patternA,
-      patternBId: this.patternMap?.get(rule.patternB) || rule.patternB,
-      relation: rule.relation || 'NESTING_ALLOWED',
+      patternAId: resolvedA,
+      patternBId: resolvedB,
+      relation,
     });
     this.lastRuleId = response.id;
   }
@@ -402,6 +512,74 @@ Given('a layout guideline {string} with min_width {int} exists', async function 
   this.lastGuidelineId = response.id;
 });
 
+Given('a composition rule exists between {string} and {string}', async function (this: MpdsWorld, nameA: string, nameB: string) {
+  // Derive IDs from names using the same slug logic
+  const toId = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  let idA = this.patternMap?.get(nameA) || toId(nameA);
+  let idB = this.patternMap?.get(nameB) || toId(nameB);
+
+  // Ensure both patterns exist, creating them if needed
+  try {
+    await patternsService.getPattern(projectId, idA);
+  } catch {
+    const r = await patternsService.createPattern(projectId, { id: idA, name: nameA, category: 'component', description: 'Test pattern' });
+    idA = r.id;
+  }
+  try {
+    await patternsService.getPattern(projectId, idB);
+  } catch {
+    const r = await patternsService.createPattern(projectId, { id: idB, name: nameB, category: 'component', description: 'Test pattern' });
+    idB = r.id;
+  }
+
+  const result = await patternsService.createCompositionRule(projectId, {
+    patternAId: idA,
+    patternBId: idB,
+    relation: 'NESTING_ALLOWED',
+  });
+  this.lastRuleId = result.id;
+});
+
+Given('a layout guideline {string} exists', async function (this: MpdsWorld, name: string) {
+  // Try to find an existing guideline with this name; create it if not found
+  const existing = await patternsService.listLayoutGuidelines(projectId, {});
+  const found = (existing.guidelines ?? []).find((g: any) => g.name === name);
+  if (found) {
+    this.lastGuidelineId = found.id;
+    return;
+  }
+  const result = await patternsService.createLayoutGuideline(projectId, {
+    type: 'breakpoints',
+    name,
+    description: '',
+    data: {},
+  });
+  this.lastGuidelineId = result.id;
+});
+
+Then('the pagination metadata should indicate:', function (this: MpdsWorld, table: DataTable) {
+  const expected = tableToObject(table);
+  const response = this.lastResult as any;
+  if (expected.total !== undefined) assert.strictEqual(response.total, Number(expected.total));
+  if (expected.limit !== undefined) assert.strictEqual(response.limit, Number(expected.limit));
+  if (expected.offset !== undefined) assert.strictEqual(response.offset, Number(expected.offset));
+});
+
+Then('pagination metadata should indicate total of {int}', function (this: MpdsWorld, total: number) {
+  const response = this.lastResult as any;
+  assert.strictEqual(response.total, total);
+});
+
+Then('the response should contain guideline data', function (this: MpdsWorld) {
+  assert.ok(this.lastResponse && this.lastResponse.id, 'Response should have id');
+  assert.ok(this.lastResponse.name, 'Response should have name');
+});
+
+Then('the guideline min_width should be {int}', function (this: MpdsWorld, minWidth: number) {
+  const data = this.lastResponse && this.lastResponse.data;
+  assert.strictEqual(data && data.minWidth, minWidth);
+});
+
 Then('the pattern should no longer exist in the database', async function (this: MpdsWorld) {
   try {
     await patternsService.getPattern(projectId, this.lastPatternId!);
@@ -422,4 +600,20 @@ Then('the rule should no longer exist', function (this: MpdsWorld) {
 
 Then('the guideline should no longer exist', function (this: MpdsWorld) {
   // Verified by 204 status
+});
+
+Given('I select pattern {string}', function (this: MpdsWorld, patternSlug: string) {
+  const resolvedId = this.patternMap?.get(patternSlug) || patternSlug;
+  this.lastPatternId = resolvedId;
+});
+
+Then('the response status should be {int} or {int}', function (
+  this: MpdsWorld,
+  statusA: number,
+  statusB: number
+) {
+  assert.ok(
+    this.lastStatus === statusA || this.lastStatus === statusB,
+    `Expected status ${statusA} or ${statusB}, got ${this.lastStatus}. Response: ${JSON.stringify(this.lastResponse)}`
+  );
 });

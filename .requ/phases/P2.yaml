@@ -1,0 +1,8 @@
+id: P2
+name: P2 — Pattern Library
+order: 1
+status: active
+description: "Phase 2 covering the Pattern Library module: CRUD for patterns,
+  variants, composition rules, layout guidelines, and input validation."
+createdAt: 2026-06-22T02:54:13.439Z
+updatedAt: 2026-06-22T02:54:13.457Z

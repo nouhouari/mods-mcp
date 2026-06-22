@@ -1,0 +1,20 @@
+id: US-004
+title: Define Layout Guidelines
+description: As a design-system author, I want to store typed layout guidelines
+  at the project level so that all teams share a single source of truth for
+  spacing, grids, and typography.
+requirements:
+  - REQ-004
+acceptanceCriteria:
+  - id: AC-1
+    text: "The type field is strictly enforced as one of: breakpoints, spacing,
+      grid, alignment, typography, animation."
+  - id: AC-2
+    text: The data blob is stored and returned exactly as submitted without lossy
+      transformation.
+  - id: AC-3
+    text: CRUD operations (create/list/get/update/delete) all return correct HTTP
+      status codes and JSON bodies.
+status: draft
+createdAt: 2026-06-22T02:54:52.105Z
+updatedAt: 2026-06-22T02:54:52.105Z

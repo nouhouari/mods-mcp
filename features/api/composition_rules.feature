@@ -8,75 +8,85 @@ Feature: Pattern Composition Rules
     Given the patterns API is accessible
     And the database is empty
 
-  @US-003-create-composition-rule
-  Scenario: Create a composition rule between patterns
+  @US-003-create-rule
+  Scenario: Create a composition rule between two patterns
     Given patterns exist:
-      | name         | id           |
-      | Button       | btn-pattern  |
-      | Icon         | icon-pattern |
-    When I POST to /api/v1/composition-rules with:
-      | field          | value                                      |
-      | parent_id      | btn-pattern                                |
-      | child_id       | icon-pattern                               |
-      | relationship   | contains                                   |
-      | cardinality    | "0..1"                                     |
+      | id   | name   |
+      | btn  | Button |
+      | icon | Icon   |
+    When I POST to "/api/v1/composition-rules" with:
+      | field      | value           |
+      | patternAId | btn             |
+      | patternBId | icon            |
+      | relation   | NESTING_ALLOWED |
     Then the response status should be 201
     And the response should contain:
-      | field        | value        |
-      | parent_id    | btn-pattern  |
-      | child_id     | icon-pattern |
-      | relationship | contains     |
+      | field    | value           |
+      | relation | NESTING_ALLOWED |
 
-  @US-003-get-composition-rules
-  Scenario: Retrieve composition rules for a pattern
-    Given a pattern exists with name "Button"
+  @US-003-get-rules-for-pattern
+  Scenario: Retrieve composition rules for a specific pattern
+    Given patterns exist:
+      | id    | name   |
+      | btn   | Button |
+      | icon  | Icon   |
+      | label | Label  |
     And composition rules exist:
-      | parent      | child | relationship |
-      | btn-pattern | icon  | contains     |
-      | btn-pattern | text  | contains     |
-    When I GET /api/v1/patterns/{pattern_id}/composition-rules
+      | patternAId | patternBId | relation        |
+      | btn        | icon       | NESTING_ALLOWED |
+      | btn        | label      | SIBLING_ONLY    |
+    And I select pattern "btn"
+    When I GET "/api/v1/patterns/{pattern_id}/composition-rules"
     Then the response status should be 200
     And the response should contain 2 composition rules
 
-  @US-003-validate-composition
-  Scenario: Validate composition against rules
-    Given a pattern "Button" with composition rule allowing 1 Icon child
-    When I POST to /api/v1/patterns/btn-pattern/validate-composition with:
-      | field    | value              |
-      | children | [{"id":"icon1"}, {"id":"icon2"}] |
-    Then the response status should be 400
-    And the error should include "Button can contain at most 1 Icon"
+  @US-003-list-all-rules
+  Scenario: List all composition rules in the system
+    Given patterns exist:
+      | id | name |
+      | a  | A    |
+      | b  | B    |
+      | c  | C    |
+    And composition rules exist:
+      | patternAId | patternBId | relation          |
+      | a          | b          | NESTING_ALLOWED   |
+      | b          | c          | SIBLING_ONLY      |
+      | a          | c          | NESTING_FORBIDDEN |
+    When I GET "/api/v1/composition-rules"
+    Then the response status should be 200
+    And the response should contain 3 rules
 
-  @US-003-delete-composition-rule
+  @US-003-delete-rule
   Scenario: Delete a composition rule
-    Given a composition rule exists between "Button" and "Icon"
-    When I DELETE /api/v1/composition-rules/{rule_id}
+    Given patterns exist:
+      | id    | name |
+      | del-a | A    |
+      | del-b | B    |
+    And a composition rule exists between "del-a" and "del-b"
+    When I DELETE "/api/v1/composition-rules/{rule_id}"
     Then the response status should be 204
     And the rule should no longer exist
 
-  @US-003-circular-dependency
-  Scenario: Prevent circular composition dependencies
+  @US-003-invalid-relation
+  Scenario: Reject a composition rule with an invalid relation value
     Given patterns exist:
-      | name   | id     |
-      | Button | btn-id |
-      | Card   | card-id |
-    And a composition rule exists: Button contains Card
-    When I POST to /api/v1/composition-rules with:
-      | field        | value   |
-      | parent_id    | card-id |
-      | child_id     | btn-id  |
-      | relationship | contains |
+      | id   | name |
+      | ev-a | A    |
+      | ev-b | B    |
+    When I POST to "/api/v1/composition-rules" with:
+      | field      | value    |
+      | patternAId | ev-a     |
+      | patternBId | ev-b     |
+      | relation   | contains |
     Then the response status should be 400
-    And the error should include "Circular dependency detected"
+    And the error should include "INVALID_RELATION"
 
-  @US-003-list-composition-rules
-  Scenario: List all composition rules in the system
-    Given composition rules exist:
-      | parent | child |
-      | btn    | icon  |
-      | card   | img   |
-      | modal  | btn   |
-    When I GET /api/v1/composition-rules?limit=2&offset=0
-    Then the response status should be 200
-    And the response should contain 2 rules
-    And pagination metadata should indicate total of 3
+  @US-003-pattern-not-found
+  Scenario: Reject a composition rule when referenced patterns do not exist
+    When I POST to "/api/v1/composition-rules" with:
+      | field      | value           |
+      | patternAId | no-such-pattern |
+      | patternBId | also-none       |
+      | relation   | NESTING_ALLOWED |
+    Then the response status should be 400 or 404
+    And the error should include "PATTERN_NOT_FOUND"

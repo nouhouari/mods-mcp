@@ -1,0 +1,15 @@
+id: REQ-004
+title: Layout Guidelines
+description: "Create, list, get, update, and delete project-scoped layout
+  guidelines typed as one of: breakpoints, spacing, grid, alignment, typography,
+  or animation."
+source: REQ-P2-004
+priority: medium
+components: []
+tags:
+  - P2
+  - layout
+  - guidelines
+status: active
+createdAt: 2026-06-22T02:54:29.745Z
+updatedAt: 2026-06-22T02:54:29.745Z

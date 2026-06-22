@@ -1,0 +1,14 @@
+id: REQ-001
+title: Pattern CRUD
+description: Create, list, get, update, and delete design patterns scoped to a
+  project. List must support pagination returning total/limit/offset.
+source: REQ-P2-001
+priority: high
+components: []
+tags:
+  - P2
+  - patterns
+  - CRUD
+status: active
+createdAt: 2026-06-22T02:54:22.934Z
+updatedAt: 2026-06-22T02:54:22.934Z

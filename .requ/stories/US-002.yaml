@@ -1,0 +1,19 @@
+id: US-002
+title: Manage Pattern Variants
+description: As a design-system consumer, I want to attach named breakpoint
+  variants to a pattern so that I can capture how a pattern behaves across
+  different viewport sizes.
+requirements:
+  - REQ-002
+acceptanceCriteria:
+  - id: AC-1
+    text: Each variant must carry a non-empty name and an appliesAt breakpoint value.
+  - id: AC-2
+    text: Attempting to create a second variant with the same name on the same
+      pattern returns HTTP 409 (duplicate rejected).
+  - id: AC-3
+    text: CRUD operations for variants (create/list/get/update/delete) are all
+      functional and return correct responses.
+status: draft
+createdAt: 2026-06-22T02:54:46.715Z
+updatedAt: 2026-06-22T02:54:46.715Z

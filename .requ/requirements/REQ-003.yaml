@@ -1,0 +1,15 @@
+id: REQ-003
+title: Composition Rules
+description: Create, list, get, and delete rules expressing NESTING_ALLOWED,
+  NESTING_FORBIDDEN, OVERRIDE_CAUTION, SIBLING_ONLY, or EXCLUSIVE relations
+  between patterns.
+source: REQ-P2-003
+priority: high
+components: []
+tags:
+  - P2
+  - composition
+  - rules
+status: active
+createdAt: 2026-06-22T02:54:27.695Z
+updatedAt: 2026-06-22T02:54:27.695Z

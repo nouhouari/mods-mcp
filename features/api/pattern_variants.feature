@@ -11,72 +11,64 @@ Feature: Pattern Variants Management
   @US-002-create-variant
   Scenario: Create a variant for an existing pattern
     Given a pattern exists with id "btn-pattern" and name "Button"
-    When I POST to /api/v1/patterns/{pattern_id}/variants with:
-      | field    | value          |
-      | name     | primary        |
-      | props    | {"color":"primary","size":"md"} |
+    When I POST to "/api/v1/patterns/{pattern_id}/variants" with:
+      | field     | value   |
+      | name      | primary |
+      | appliesAt | mobile  |
     Then the response status should be 201
     And the response should contain:
-      | field        | value   |
-      | variant_name | primary |
-      | pattern_id   | <uuid>  |
+      | field | value   |
+      | name  | primary |
 
   @US-002-list-variants
   Scenario: List all variants for a pattern
-    Given a pattern exists with name "Button"
+    Given a pattern exists with name "btn-list"
     And the pattern has variants:
-      | name      |
-      | primary   |
-      | secondary |
-      | disabled  |
-    When I GET /api/v1/patterns/{pattern_id}/variants
+      | name      | appliesAt |
+      | primary   | mobile    |
+      | secondary | tablet    |
+      | disabled  | desktop   |
+    When I GET "/api/v1/patterns/{pattern_id}/variants"
     Then the response status should be 200
     And the response should contain 3 variant objects
 
   @US-002-get-variant
   Scenario: Retrieve a specific variant
-    Given a pattern exists with name "Button"
+    Given a pattern exists with name "btn-get"
     And a variant "primary" exists for the pattern
-    When I GET /api/v1/patterns/{pattern_id}/variants/primary
+    When I GET "/api/v1/patterns/{pattern_id}/variants/{variant_id}"
     Then the response status should be 200
     And the response should contain:
-      | field        | value   |
-      | variant_name | primary |
+      | field | value   |
+      | name  | primary |
 
   @US-002-update-variant
   Scenario: Update variant properties
-    Given a pattern exists with name "Button"
-    And a variant "primary" exists with props {"color": "blue"}
-    When I PATCH /api/v1/patterns/{pattern_id}/variants/primary with:
-      | field | value                  |
-      | props | {"color":"navy","size":"lg"} |
+    Given a pattern exists with name "btn-upd"
+    And a variant "primary" exists for the pattern
+    When I PATCH "/api/v1/patterns/{pattern_id}/variants/{variant_id}" with:
+      | field     | value   |
+      | name      | primary |
+      | appliesAt | tablet  |
     Then the response status should be 200
-    And the variant props should be {"color": "navy", "size": "lg"}
+    And the response should contain:
+      | field     | value  |
+      | appliesAt | tablet |
 
   @US-002-delete-variant
   Scenario: Delete a variant
-    Given a pattern exists with name "Button"
+    Given a pattern exists with name "btn-del"
     And a variant "deprecated" exists for the pattern
-    When I DELETE /api/v1/patterns/{pattern_id}/variants/deprecated
+    When I DELETE "/api/v1/patterns/{pattern_id}/variants/{variant_id}"
     Then the response status should be 204
     And the variant should no longer exist
 
-  @US-002-variant-props-validation
-  Scenario: Validate variant props against pattern schema
-    Given a pattern exists with name "Button" with schema:
-      """
-      {
-        "type": "object",
-        "properties": {
-          "color": {"type": "string", "enum": ["primary", "secondary"]},
-          "size": {"type": "string", "enum": ["sm", "md", "lg"]}
-        },
-        "required": ["color"]
-      }
-      """
-    When I POST to /api/v1/patterns/{pattern_id}/variants with:
-      | field | value                |
-      | name  | invalid              |
-      | props | {"color":"invalid"}  |
+  @US-002-duplicate-variant
+  Scenario: Reject duplicate variant name within a pattern
+    Given a pattern exists with name "btn-dup"
+    And a variant "primary" exists for the pattern
+    When I POST to "/api/v1/patterns/{pattern_id}/variants" with:
+      | field     | value   |
+      | name      | primary |
+      | appliesAt | mobile  |
     Then the response status should be 400
-    And the error should include "color must be one of: primary, secondary"

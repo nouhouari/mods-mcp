@@ -471,7 +471,7 @@ export async function createCompositionRule(projectId: string, payload: {
   // Validate relation enum
   const validRelations = ['NESTING_ALLOWED', 'NESTING_FORBIDDEN', 'OVERRIDE_CAUTION', 'SIBLING_ONLY', 'EXCLUSIVE'];
   if (!validRelations.includes(payload.relation)) {
-    throw new PatternsError('INVALID_COMPOSITION', `relation must be one of: ${validRelations.join(', ')}`);
+    throw new PatternsError('INVALID_RELATION', `relation must be one of: ${validRelations.join(', ')}`);
   }
 
   const id = randomUUID();
@@ -604,7 +604,7 @@ export async function createLayoutGuideline(
   // Validate type enum
   const validTypes = ['breakpoints', 'spacing', 'grid', 'alignment', 'typography', 'animation'];
   if (!validTypes.includes(payload.type)) {
-    throw new PatternsError('INVALID_GUIDELINE_TYPE', `type must be one of: ${validTypes.join(', ')}`);
+    throw new PatternsError('INVALID_TYPE', `type must be one of: ${validTypes.join(', ')}`);
   }
 
   const db = getDb();

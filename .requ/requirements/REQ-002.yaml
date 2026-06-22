@@ -1,0 +1,15 @@
+id: REQ-002
+title: Pattern Variants
+description: Create, list, get, update, and delete variants per pattern. Each
+  variant must have a name and an appliesAt breakpoint. Duplicate names within
+  the same pattern must be rejected.
+source: REQ-P2-002
+priority: high
+components: []
+tags:
+  - P2
+  - variants
+  - CRUD
+status: active
+createdAt: 2026-06-22T02:54:26.241Z
+updatedAt: 2026-06-22T02:54:26.241Z

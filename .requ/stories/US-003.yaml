@@ -1,0 +1,19 @@
+id: US-003
+title: Define Composition Rules
+description: As a design-system author, I want to declare composition rules
+  between patterns so that consumers know which combinations are allowed,
+  forbidden, or require caution.
+requirements:
+  - REQ-003
+acceptanceCriteria:
+  - id: AC-1
+    text: "The relation field is strictly enforced as one of: NESTING_ALLOWED,
+      NESTING_FORBIDDEN, OVERRIDE_CAUTION, SIBLING_ONLY, EXCLUSIVE."
+  - id: AC-2
+    text: Rules are retrievable by source pattern ID via GET /patterns/:id/rules.
+  - id: AC-3
+    text: Create, list, get, and delete operations all work correctly and return
+      appropriate HTTP status codes.
+status: draft
+createdAt: 2026-06-22T02:54:49.448Z
+updatedAt: 2026-06-22T02:54:49.448Z

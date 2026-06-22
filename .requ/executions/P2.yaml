@@ -1,0 +1,906 @@
+phase: P2
+runs:
+  - feature: components-crud
+    name: Create component spec returns defaults for array fields and version 0
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: getSpec returns the same spec with all fields correctly deserialized
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: Duplicate component id in same project throws DUPLICATE_COMPONENT_ID
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: createSpec with non-existent projectId throws PROJECT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: listSpecs returns empty array when no components exist
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: listSpecs returns all specs after multiple createSpec calls
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: Each listSpecs entry includes all required fields
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: listSpecs with non-existent projectId throws PROJECT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: updateSpec with matching version increments version by 1
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: updateSpec with stale version throws CONFLICT
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: updateSpec on non-existent component throws COMPONENT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: updateSpec on non-existent projectId throws PROJECT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: deleteSpec removes the component; subsequent getSpec throws
+      COMPONENT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: deleteSpec cascades overrides and component no longer appears in listSpecs
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: deleteSpec on non-existent componentId throws COMPONENT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-crud
+    name: deleteSpec on non-existent projectId throws PROJECT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: setOverride with valid fields returns ResolvedComponentSpec with
+      overridden values
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: After setOverride getSpec returns the overridden field values
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: setOverride with invalid field throws INVALID_OVERRIDE_FIELD with field
+      property set
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: Base spec is unchanged after child project sets an override
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: deleteOverride reverts getSpec to base values
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: deleteOverride is idempotent when no override exists
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: With no project override all _sources fields are 'base'
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: After variants override _sources.variants is 'override' and _sources.name
+      is 'base'
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: Overriding array field replaces base array entirely with no element-level
+      merge
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: components-overrides
+    name: Non-overridden fields fall through to base value unchanged
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: Create a composition rule between two patterns
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: Retrieve composition rules for a specific pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: List all composition rules in the system
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: Delete a composition rule
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: Reject a composition rule with an invalid relation value
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Composition Rules
+    name: Reject a composition rule when referenced patterns do not exist
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: getDb called twice returns same object reference
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: journal_mode pragma is WAL
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: foreign_keys pragma is ON
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: busy_timeout pragma is 5000
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: migrations table records each applied migration
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: runMigrations called twice does not re-apply migrations
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: expected tables exist after runMigrations
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: db-bootstrap
+    name: trigger tokens_semantic_ref_insert exists after runMigrations
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: Create a layout guideline
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: List all layout guidelines
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: Get a layout guideline by ID
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: Update a layout guideline
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: Delete a layout guideline
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Layout Guidelines
+    name: Reject layout guideline with invalid type
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp propose_token_override and list_proposals MCP tools (@US-042)
+    name: propose_token_override creates a pending proposal with proposalId and
+      status pending
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp propose_token_override and list_proposals MCP tools (@US-042)
+    name: list_proposals returns proposals with pending status
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp propose_token_override and list_proposals MCP tools (@US-042)
+    name: pending proposal does not affect resolved token value
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp propose_token_override and list_proposals MCP tools (@US-042)
+    name: submitting duplicate pending proposal returns PROPOSAL_ALREADY_PENDING
+      error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Components
+    name: GET /api/projects/:id/components returns array
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Components
+    name: GET /api/projects/:id/components/:componentId returns component
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Components
+    name: GET /api/projects/:id/components/nonexistent returns 404
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: GET /api/projects returns empty array initially
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: POST /api/projects creates a project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: GET /api/projects/:id returns the project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: GET /api/projects/:id for unknown project returns 404
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: POST /api/projects with duplicate id returns 409
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Projects CRUD
+    name: DELETE /api/projects/:id returns 204
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Tokens
+    name: GET /api/projects/:id/tokens returns empty array for new project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Tokens
+    name: DELETE /api/projects/:id/tokens/:key/override returns 204 (idempotent)
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Tokens
+    name: PUT token override without version in body returns 400 MISSING_VERSION
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Tokens
+    name: PUT token override with non-number version returns 400 INVALID_VERSION
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Tokens
+    name: PUT token override with stale version returns 409 CONFLICT without
+      currentVersion
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp search_guidelines MCP tool (@US-041)
+    name: search_guidelines with empty query returns all guidelines ordered by
+      createdAt
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp search_guidelines MCP tool (@US-041)
+    name: search_guidelines with keyword returns matching results with relevanceScore
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp search_guidelines MCP tool (@US-041)
+    name: search_guidelines bodyExcerpt is at most 200 characters
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp search_guidelines MCP tool (@US-041)
+    name: search_guidelines appears in MCP tool manifest
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: Health endpoint returns 200 without auth
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: List projects with valid bearer token returns 200
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: Missing Authorization header returns 401 MISSING_AUTH_HEADER
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: Invalid bearer token returns 401 INVALID_TOKEN
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_tokens returns token array for existing project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_tokens filtered by category
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_tokens for unknown project returns JSON-RPC error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_design_system returns tokens object and components array
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_design_system for unknown project returns JSON-RPC error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_component_spec returns resolved spec
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp HTTP Server
+    name: get_component_spec for unknown component returns JSON-RPC error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_color_pair black on white passes
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: "validate_color_pair #777777 on white normal fails"
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: "validate_color_pair #777777 on white large passes"
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_color_pair with invalid color returns JSON-RPC error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_token_pair with valid tokens returns result
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_token_pair with missing project returns JSON-RPC error
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_snippet with valid HTML returns result
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Validate MCP Tools
+    name: validate_snippet with contrast violation returns passes false
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: Health endpoint returns 200 without auth
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: POST /mcp without auth returns 401 MISSING_AUTH_HEADER
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: POST /mcp with Basic auth returns 401 INVALID_AUTH_SCHEME
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: POST /mcp with wrong bearer token returns 401 INVALID_TOKEN
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: POST /mcp with empty bearer token returns 401 INVALID_TOKEN
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp Transport Authentication (@US-026)
+    name: POST /mcp with correct bearer returns 200
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Validate Endpoint
+    name: POST /api/validate/color-pair black on white passes
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Validate Endpoint
+    name: "POST /api/validate/color-pair #777777 on white fails"
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: C-mcp REST Validate Endpoint
+    name: POST /api/validate/color-pair with invalid color returns 400
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject pattern with non-kebab-case id
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject pattern creation when id field is absent
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject pattern creation when name field is absent
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject pattern creation when category field is absent
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject pattern creation when id already exists
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject composition rule with invalid relation enum
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject layout guideline creation with unknown type
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Inline Validation
+    name: Reject composition rule when referenced patterns do not exist
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: Create a variant for an existing pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: List all variants for a pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: Retrieve a specific variant
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: Update variant properties
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: Delete a variant
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern Variants Management
+    name: Reject duplicate variant name within a pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Create a new pattern successfully
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Reject pattern creation with missing required fields
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Retrieve a pattern by ID
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Return 404 when pattern does not exist
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: List all patterns
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Update an existing pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Delete a pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: Pattern CRUD Operations
+    name: Return 404 when deleting non-existent pattern
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Create a project with a unique id
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Duplicate project id returns DUPLICATE_PROJECT_ID
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Get an existing project by id
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Get a non-existent project throws PROJECT_NOT_FOUND
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: List all projects returns ordered array
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Update a project name
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Delete a leaf project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Delete base project with children throws BASE_HAS_CHILDREN
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-crud
+    name: Delete project with tokens throws PROJECT_HAS_TOKENS
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-inheritance
+    name: Create a child project pointing to a base
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-inheritance
+    name: Grandchild creation is rejected with MAX_INHERITANCE_DEPTH
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-inheritance
+    name: isBase returns true for base and false for child
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-inheritance
+    name: isBase throws PROJECT_NOT_FOUND for unknown project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: registry-project-inheritance
+    name: "Project isolation: override in child does not affect base"
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: Set a project override and resolve shows override value
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: Delete override reverts to base value
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: Non-overridden tokens inherit base value with source=base
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: Overrides from one project do not bleed into another project
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: resolveTokens filtered by category returns only that category
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-overrides-resolution
+    name: Two consecutive resolveTokens calls return identical results
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Create and retrieve a primitive color token
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Invalid category returns INVALID_CATEGORY
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Duplicate key in same project and category returns DUPLICATE_TOKEN_KEY
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Filter tokens by category returns only matching tokens
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Update token value with OCC
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: OCC conflict returns CONFLICT
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-primitive-crud
+    name: Delete a token
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-semantic
+    name: Create a semantic token referencing a primitive
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-semantic
+    name: Circular reference A to B to A is rejected
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-semantic
+    name: Delete primitive referenced by semantic returns
+      TOKEN_REFERENCED_BY_SEMANTIC
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
+  - feature: tokens-semantic
+    name: Semantic chain of depth 5 succeeds
+    status: pass
+    ranAt: 2026-06-22T03:04:37.787Z
+    runId: p2-verify-2026-06-22
+    source: cucumber-json
