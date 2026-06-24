@@ -93,3 +93,30 @@ Feature: Token Management via MCP Write Tools
       """
     Then the response status is 200
     And the MCP error code should include "TOKEN_NOT_FOUND"
+
+  # ---------------------------------------------------------------------------
+  # @regression-token-categories — border / motion / other were advertised by the
+  # tool schema and rendered by the showcase but rejected by the app validator
+  # and the DB CHECK constraint. All nine canonical categories must be accepted.
+  # ---------------------------------------------------------------------------
+
+  @regression-token-categories
+  Scenario Outline: Create tokens for every canonical category
+    When I call the MCP write method "create_token" with JSON params:
+      """
+      {"projectId":"tok-proj","key":"k.<category>","category":"<category>","value":"4px"}
+      """
+    Then the response status is 200
+    And the MCP result field "category" equals "<category>"
+
+    Examples:
+      | category   |
+      | color      |
+      | typography |
+      | spacing    |
+      | radius     |
+      | shadow     |
+      | breakpoint |
+      | border     |
+      | motion     |
+      | other      |

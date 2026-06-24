@@ -231,6 +231,514 @@ function codeToStatus(code: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// MCP tool catalog (for initialize / tools/list)
+// ---------------------------------------------------------------------------
+
+const MCP_TOOLS: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> = [
+  // ── Projects ──────────────────────────────────────────────────────────────
+  {
+    name: 'list_projects',
+    description: 'List all design system projects.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_project',
+    description: 'Create a new design system project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Unique project identifier' },
+        name: { type: 'string', description: 'Human-readable project name' },
+        parentId: { type: 'string', description: 'Parent project ID for token inheritance (optional)' },
+      },
+      required: ['id', 'name'],
+    },
+  },
+  {
+    name: 'update_project',
+    description: 'Rename a project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        name: { type: 'string' },
+      },
+      required: ['projectId', 'name'],
+    },
+  },
+  {
+    name: 'delete_project',
+    description: 'Delete a project.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: { type: 'string' } },
+      required: ['projectId'],
+    },
+  },
+
+  // ── Tokens ────────────────────────────────────────────────────────────────
+  {
+    name: 'get_tokens',
+    description: 'Resolve all tokens for a project, including inherited values from parent projects.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        category: { type: 'string', description: 'Filter by category (color, typography, spacing, …)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'list_tokens',
+    description: 'List raw tokens stored directly in a project (no parent inheritance).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        category: { type: 'string' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'get_token',
+    description: 'Get a single token by key.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+      },
+      required: ['projectId', 'key'],
+    },
+  },
+  {
+    name: 'create_token',
+    description: 'Create a new design token in a project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+        category: { type: 'string', enum: ['color', 'typography', 'spacing', 'radius', 'shadow', 'breakpoint', 'border', 'motion', 'other'] },
+        value: { type: 'string' },
+        isSemantic: { type: 'boolean' },
+        semanticRef: { type: 'string', description: 'Key of the primitive token this semantic token references' },
+      },
+      required: ['projectId', 'key', 'category', 'value'],
+    },
+  },
+  {
+    name: 'update_token',
+    description: 'Update a token value. Provide the current version for optimistic concurrency control.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+        version: { type: 'number' },
+        value: { type: 'string' },
+        semanticRef: { type: 'string' },
+      },
+      required: ['projectId', 'key', 'version'],
+    },
+  },
+  {
+    name: 'set_token',
+    description: 'Set a token override on a child project (overrides the inherited parent value).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+        value: { type: 'string' },
+        version: { type: 'number' },
+      },
+      required: ['projectId', 'key', 'value', 'version'],
+    },
+  },
+  {
+    name: 'delete_token',
+    description: 'Delete a token.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+        version: { type: 'number' },
+      },
+      required: ['projectId', 'key', 'version'],
+    },
+  },
+  {
+    name: 'delete_token_override',
+    description: 'Remove a child-project token override, restoring the inherited parent value.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+      },
+      required: ['projectId', 'key'],
+    },
+  },
+
+  // ── Design system (aggregate) ──────────────────────────────────────────────
+  {
+    name: 'get_design_system',
+    description: 'Get the full resolved token map and component list for a project in one call.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: { type: 'string' } },
+      required: ['projectId'],
+    },
+  },
+
+  // ── Components ────────────────────────────────────────────────────────────
+  {
+    name: 'get_component_spec',
+    description: 'Get a component specification.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        componentId: { type: 'string' },
+      },
+      required: ['projectId', 'componentId'],
+    },
+  },
+  {
+    name: 'create_component',
+    description: 'Create a component specification.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        id: { type: 'string' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        props: { type: 'object' },
+        variants: { type: 'object' },
+        states: { type: 'object' },
+        usageRules: { type: 'object' },
+        accessibilityNotes: { type: 'object' },
+      },
+      required: ['projectId', 'id', 'name'],
+    },
+  },
+  {
+    name: 'update_component',
+    description: 'Update a component specification.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        componentId: { type: 'string' },
+        version: { type: 'number' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        props: { type: 'object' },
+        variants: { type: 'object' },
+        states: { type: 'object' },
+        usageRules: { type: 'object' },
+        accessibilityNotes: { type: 'object' },
+      },
+      required: ['projectId', 'componentId', 'version'],
+    },
+  },
+  {
+    name: 'delete_component',
+    description: 'Delete a component specification.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        componentId: { type: 'string' },
+      },
+      required: ['projectId', 'componentId'],
+    },
+  },
+
+  // ── Validation ────────────────────────────────────────────────────────────
+  {
+    name: 'validate_color_pair',
+    description: 'Check WCAG contrast ratio for a foreground/background color pair.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fg: { type: 'string', description: 'Foreground color: #RGB, #RRGGBB, or rgb(R,G,B)' },
+        bg: { type: 'string', description: 'Background color: #RGB, #RRGGBB, or rgb(R,G,B)' },
+        context: { type: 'string', enum: ['normal', 'large', 'ui'] },
+      },
+      required: ['fg', 'bg', 'context'],
+    },
+  },
+  {
+    name: 'validate_token_pair',
+    description: 'Validate WCAG contrast for two token keys — resolves their values automatically.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        fgKey: { type: 'string' },
+        bgKey: { type: 'string' },
+        context: { type: 'string', enum: ['normal', 'large', 'ui'] },
+      },
+      required: ['projectId', 'fgKey', 'bgKey', 'context'],
+    },
+  },
+  {
+    name: 'validate_snippet',
+    description: 'Lint an HTML or JSX snippet for accessibility and design-system issues.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' },
+        contentType: { type: 'string', enum: ['html', 'jsx'] },
+      },
+      required: ['content'],
+    },
+  },
+
+  // ── Guidelines ────────────────────────────────────────────────────────────
+  {
+    name: 'create_guideline',
+    description: 'Create a design guideline entry.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['id', 'title'],
+    },
+  },
+  {
+    name: 'search_guidelines',
+    description: 'Full-text search design guidelines.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query (empty returns all)' },
+      },
+    },
+  },
+
+  // ── Proposals ─────────────────────────────────────────────────────────────
+  {
+    name: 'propose_token_override',
+    description: 'Submit a proposed token override for human review.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        key: { type: 'string' },
+        value: { type: 'string' },
+        rationale: { type: 'string' },
+      },
+      required: ['projectId', 'key', 'value'],
+    },
+  },
+  {
+    name: 'list_proposals',
+    description: 'List pending token override proposals for a project.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: { type: 'string' } },
+      required: ['projectId'],
+    },
+  },
+
+  // ── Patterns ──────────────────────────────────────────────────────────────
+  {
+    name: 'create_pattern',
+    description: 'Create a design pattern.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        id: { type: 'string' },
+        name: { type: 'string' },
+        category: { type: 'string' },
+        description: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        guidanceUrl: { type: 'string' },
+      },
+      required: ['projectId', 'id', 'name', 'category'],
+    },
+  },
+  {
+    name: 'update_pattern',
+    description: 'Update a design pattern.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternId: { type: 'string' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        guidanceUrl: { type: 'string' },
+      },
+      required: ['projectId', 'patternId'],
+    },
+  },
+  {
+    name: 'delete_pattern',
+    description: 'Delete a design pattern.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternId: { type: 'string' },
+      },
+      required: ['projectId', 'patternId'],
+    },
+  },
+
+  // ── Variants ──────────────────────────────────────────────────────────────
+  {
+    name: 'create_variant',
+    description: 'Add a variant to a pattern.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternId: { type: 'string' },
+        name: { type: 'string' },
+        appliesAt: { type: 'string', description: 'Breakpoint or context where the variant applies' },
+        description: { type: 'string' },
+      },
+      required: ['projectId', 'patternId', 'name', 'appliesAt'],
+    },
+  },
+  {
+    name: 'update_variant',
+    description: 'Update a pattern variant.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternId: { type: 'string' },
+        variantId: { type: 'string' },
+        name: { type: 'string' },
+        appliesAt: { type: 'string' },
+        description: { type: 'string' },
+      },
+      required: ['projectId', 'patternId', 'variantId'],
+    },
+  },
+  {
+    name: 'delete_variant',
+    description: 'Delete a pattern variant.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternId: { type: 'string' },
+        variantId: { type: 'string' },
+      },
+      required: ['projectId', 'patternId', 'variantId'],
+    },
+  },
+
+  // ── Composition rules ─────────────────────────────────────────────────────
+  {
+    name: 'create_composition_rule',
+    description: 'Define a composition rule between two patterns.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        patternAId: { type: 'string' },
+        patternBId: { type: 'string' },
+        relation: { type: 'string', enum: ['contains', 'excludes', 'recommends', 'requires'] },
+        guidance: { type: 'string' },
+      },
+      required: ['projectId', 'patternAId', 'patternBId', 'relation'],
+    },
+  },
+  {
+    name: 'delete_composition_rule',
+    description: 'Delete a composition rule.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        ruleId: { type: 'string' },
+      },
+      required: ['projectId', 'ruleId'],
+    },
+  },
+
+  // ── Layout guidelines ─────────────────────────────────────────────────────
+  {
+    name: 'create_layout_guideline',
+    description: 'Create a layout guideline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        type: { type: 'string' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        data: { type: 'object' },
+      },
+      required: ['projectId', 'type', 'name', 'data'],
+    },
+  },
+  {
+    name: 'update_layout_guideline',
+    description: 'Update a layout guideline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        guidelineId: { type: 'string' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        data: { type: 'object' },
+      },
+      required: ['projectId', 'guidelineId'],
+    },
+  },
+  {
+    name: 'delete_layout_guideline',
+    description: 'Delete a layout guideline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        guidelineId: { type: 'string' },
+      },
+      required: ['projectId', 'guidelineId'],
+    },
+  },
+
+  // ── Showcase ──────────────────────────────────────────────────────────────
+  {
+    name: 'generate_showcase',
+    description: "Generate an HTML showcase page for a project's design tokens and components.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string' },
+        title: { type: 'string' },
+        format: {
+          type: 'string',
+          enum: ['json', 'html'],
+          description: 'json (default) returns { html, …counts }; html returns the raw HTML string directly.',
+        },
+      },
+      required: ['projectId'],
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
 // MCP JSON-RPC dispatcher
 // ---------------------------------------------------------------------------
 
@@ -614,12 +1122,60 @@ async function dispatchMcp(
       }
 
       case 'generate_showcase': {
-        const { projectId, title } = (rpc.params ?? {}) as { projectId?: string; title?: string };
+        const { projectId, title, format } = (rpc.params ?? {}) as { projectId?: string; title?: string; format?: string };
         if (!projectId || typeof projectId !== 'string') {
           return { error: { code: 'MISSING_FIELD', message: '"projectId" is required' } };
         }
         const result = await generateShowcase(projectId, title);
+        // format:"html" → return the raw HTML string directly (no wrapper) for
+        // consumers that render the document; default returns { html, ...counts }.
+        if (format === 'html') {
+          return { result: result.html };
+        }
         return { result };
+      }
+
+      // ── Standard MCP protocol methods ──────────────────────────────────────
+
+      case 'initialize': {
+        return {
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'mpds-mcp', version: '0.3.0' },
+          },
+        };
+      }
+
+      case 'notifications/initialized':
+      case 'ping': {
+        return { result: {} };
+      }
+
+      case 'tools/list': {
+        return { result: { tools: MCP_TOOLS } };
+      }
+
+      case 'tools/call': {
+        const toolName = params['name'] as string | undefined;
+        const toolArgs = (params['arguments'] ?? {}) as Record<string, unknown>;
+        if (!toolName) {
+          return { error: { code: 'INVALID_PARAMS', message: '"name" is required for tools/call' } };
+        }
+        const metaMethods = new Set(['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call']);
+        if (metaMethods.has(toolName)) {
+          return { error: { code: 'INVALID_PARAMS', message: 'Cannot invoke a meta-method as a tool' } };
+        }
+        const innerRpc: JsonRpcRequest = { jsonrpc: '2.0', id: null, method: toolName, params: toolArgs };
+        const inner = await dispatchMcp(innerRpc, reqHeaders);
+        if (inner.error) {
+          return {
+            result: { content: [{ type: 'text', text: JSON.stringify(inner.error) }], isError: true },
+          };
+        }
+        return {
+          result: { content: [{ type: 'text', text: JSON.stringify(inner.result) }] },
+        };
       }
 
       default:
