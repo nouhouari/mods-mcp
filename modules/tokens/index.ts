@@ -6,7 +6,7 @@ import { getProject, RegistryError } from '../registry/index';
 // Constants
 // ---------------------------------------------------------------------------
 
-const TOKEN_CATEGORIES = ['color', 'spacing', 'typography', 'radius', 'shadow', 'breakpoint'] as const;
+const TOKEN_CATEGORIES = ['color', 'spacing', 'typography', 'radius', 'shadow', 'breakpoint', 'border', 'motion', 'other'] as const;
 type TokenCategory = (typeof TOKEN_CATEGORIES)[number];
 
 // ---------------------------------------------------------------------------

@@ -104,3 +104,48 @@ Feature: Design System Visual Showcase
       {"projectId": "ghost-project"}
       """
     Then the MCP error code should include "PROJECT_NOT_FOUND"
+
+  # ---------------------------------------------------------------------------
+  # @regression-variants-not-array — generate_showcase must not crash when a
+  # component is stored with non-array variants/states/props (e.g. {} instead
+  # of []).  Regression for: "c.variants.map is not a function" in html.ts:175.
+  # ---------------------------------------------------------------------------
+
+  @regression-variants-not-array
+  Scenario: generate_showcase does not crash when component fields are objects instead of arrays
+    Given a project "regression-ds" exists in the registry
+    When I call the MCP write method "create_component" with JSON params:
+      """
+      {
+        "projectId": "regression-ds",
+        "id": "bad-comp",
+        "name": "BadComp",
+        "variants": {},
+        "states": {},
+        "props": {},
+        "usageRules": {},
+        "accessibilityNotes": {}
+      }
+      """
+    And I call the MCP write method "generate_showcase" with JSON params:
+      """
+      {"projectId": "regression-ds"}
+      """
+    Then the response status is 200
+    And the MCP result field "html" should be a non-empty string
+    And the MCP result field "componentCount" should be 1
+
+  # ---------------------------------------------------------------------------
+  # @regression-showcase-format-html — format:"html" returns the raw HTML string
+  # directly (not the { html, …counts } wrapper) for consumers that render it.
+  # ---------------------------------------------------------------------------
+
+  @regression-showcase-format-html
+  Scenario: generate_showcase with format html returns raw HTML
+    Given a project "fmt-ds" exists in the registry
+    When I call the MCP write method "generate_showcase" with JSON params:
+      """
+      {"projectId": "fmt-ds", "format": "html"}
+      """
+    Then the response status is 200
+    And the MCP result should be a raw HTML document

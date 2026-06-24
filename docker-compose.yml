@@ -1,0 +1,24 @@
+services:
+  mpds-mcp:
+    image: ghcr.io/nouhouari/mods-mcp:latest
+    container_name: mpds-mcp
+    ports:
+      - "3100:3100"
+    environment:
+      MCP_PORT: "3100"
+      DB_PATH: /home/mpds/data/mpds.db
+      MPDS_ENV: production
+      # MCP_SECRET is required — set it in a .env file (never commit it)
+      MCP_SECRET: ${MCP_SECRET}
+    volumes:
+      - mpds-data:/home/mpds/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mpds-data:

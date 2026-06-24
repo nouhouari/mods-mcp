@@ -120,3 +120,29 @@ Then(
     );
   }
 );
+
+// ---------------------------------------------------------------------------
+// Then — result is a raw HTML document (format:"html")
+// ---------------------------------------------------------------------------
+
+/**
+ * Assert that the JSON-RPC result IS the raw HTML string itself (not a wrapper
+ * object). Used for generate_showcase with format:"html".
+ */
+Then(
+  'the MCP result should be a raw HTML document',
+  function (this: MpdsWorld) {
+    const body = this.lastResult as Record<string, unknown> | null;
+    assert.ok(body !== null && typeof body === 'object', 'Expected a JSON-RPC response object');
+    const result = body['result'];
+    assert.strictEqual(
+      typeof result,
+      'string',
+      `Expected result to be a raw HTML string, got ${typeof result}`
+    );
+    assert.ok(
+      (result as string).trimStart().startsWith('<!DOCTYPE'),
+      `Expected raw HTML to start with <!DOCTYPE, got: ${(result as string).slice(0, 40)}`
+    );
+  }
+);

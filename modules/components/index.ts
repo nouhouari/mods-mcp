@@ -25,6 +25,7 @@ export const COMPONENTS_ERRORS = {
   INVALID_OVERRIDE_FIELD: 'INVALID_OVERRIDE_FIELD',
   CONFLICT: 'CONFLICT',
   PROJECT_NOT_FOUND: 'PROJECT_NOT_FOUND',
+  INVALID_PROJECT: 'INVALID_PROJECT',
 } as const;
 
 export type ComponentsErrorCode = (typeof COMPONENTS_ERRORS)[keyof typeof COMPONENTS_ERRORS];
@@ -57,16 +58,30 @@ export interface ComponentProp {
   description?: string;
 }
 
+// Structured component fields accept EITHER an array (of strings, or of objects
+// like ComponentProp) OR an object/map (e.g. { primary: { description } }).
+// Both shapes are stored verbatim and rendered appropriately by the showcase.
+export type StructuredField = unknown[] | Record<string, unknown>;
+
+// Preserve arrays and plain objects as-is; coerce anything else (string, number,
+// null, undefined) to an empty array so the storage layer never holds a value
+// the readers can't handle.
+export function normalizeStructuredField(v: unknown): StructuredField {
+  if (Array.isArray(v)) return v;
+  if (v !== null && typeof v === 'object') return v as Record<string, unknown>;
+  return [];
+}
+
 export interface ComponentSpec {
   id: string;
   projectId: string;
   name: string;
   description?: string;
-  props: ComponentProp[];
-  variants: string[];
-  states: string[];
-  usageRules: string[];
-  accessibilityNotes: string[];
+  props: StructuredField;
+  variants: StructuredField;
+  states: StructuredField;
+  usageRules: StructuredField;
+  accessibilityNotes: StructuredField;
   version: number;
 }
 
@@ -101,6 +116,25 @@ function findBaseSpec(db: Database.Database, componentId: string): any | null {
   );
 }
 
+// A component owned directly by `projectId` whose id is NOT a root-project base
+// spec — i.e. a genuinely child-owned component (not an override of an inherited
+// one). Override rows reuse a base id and are resolved via findBaseSpec instead.
+function findOwnedSpec(db: Database.Database, projectId: string, componentId: string): any | null {
+  return (
+    db
+      .prepare(
+        `SELECT cs.* FROM component_specs cs
+         WHERE cs.id = ? AND cs.project_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM component_specs b
+             INNER JOIN projects p ON p.id = b.project_id
+             WHERE b.id = cs.id AND p.parent_id IS NULL
+           )`
+      )
+      .get(componentId, projectId) ?? null
+  );
+}
+
 function rowToSpec(row: any): ComponentSpec {
   const json = JSON.parse(row.spec_json);
   return {
@@ -108,11 +142,11 @@ function rowToSpec(row: any): ComponentSpec {
     projectId: row.project_id,
     name: json.name,
     description: json.description,
-    props: json.props ?? [],
-    variants: json.variants ?? [],
-    states: json.states ?? [],
-    usageRules: json.usageRules ?? [],
-    accessibilityNotes: json.accessibilityNotes ?? [],
+    props: normalizeStructuredField(json.props),
+    variants: normalizeStructuredField(json.variants),
+    states: normalizeStructuredField(json.states),
+    usageRules: normalizeStructuredField(json.usageRules),
+    accessibilityNotes: normalizeStructuredField(json.accessibilityNotes),
     version: row.version,
   };
 }
@@ -162,11 +196,11 @@ function resolveSpec(baseRow: any, overrideRow: any | null): ResolvedComponentSp
     projectId: baseRow.project_id,
     name: merged.name,
     description: merged.description,
-    props: merged.props ?? [],
-    variants: merged.variants ?? [],
-    states: merged.states ?? [],
-    usageRules: merged.usageRules ?? [],
-    accessibilityNotes: merged.accessibilityNotes ?? [],
+    props: normalizeStructuredField(merged.props),
+    variants: normalizeStructuredField(merged.variants),
+    states: normalizeStructuredField(merged.states),
+    usageRules: normalizeStructuredField(merged.usageRules),
+    accessibilityNotes: normalizeStructuredField(merged.accessibilityNotes),
     version: baseRow.version,
     _sources,
   };
@@ -181,24 +215,29 @@ export async function createSpec(input: {
   projectId: string;
   name: string;
   description?: string;
-  props?: ComponentProp[];
-  variants?: string[];
-  states?: string[];
-  usageRules?: string[];
-  accessibilityNotes?: string[];
+  // Accept either array or object-map shapes (normalized at storage).
+  props?: unknown;
+  variants?: unknown;
+  states?: unknown;
+  usageRules?: unknown;
+  accessibilityNotes?: unknown;
 }): Promise<ComponentSpec> {
-  await ensureProjectExists(input.projectId);
+  await ensureProjectExists(input.projectId); // throws ComponentsError PROJECT_NOT_FOUND
+
+  // Components may be created on any project — root projects own base specs that
+  // children inherit, and child projects may own their own components (surfaced
+  // by listSpecs/getSpec alongside inherited ones). See findOwnedSpec / listSpecs.
 
   const db = getDb();
   try {
     const specJson = JSON.stringify({
       name: input.name,
       ...(input.description !== undefined ? { description: input.description } : {}),
-      props: input.props ?? [],
-      variants: input.variants ?? [],
-      states: input.states ?? [],
-      usageRules: input.usageRules ?? [],
-      accessibilityNotes: input.accessibilityNotes ?? [],
+      props: normalizeStructuredField(input.props),
+      variants: normalizeStructuredField(input.variants),
+      states: normalizeStructuredField(input.states),
+      usageRules: normalizeStructuredField(input.usageRules),
+      accessibilityNotes: normalizeStructuredField(input.accessibilityNotes),
     });
 
     try {
@@ -233,6 +272,11 @@ export async function getSpec(projectId: string, componentId: string): Promise<R
   try {
     const baseRow = findBaseSpec(db, componentId);
     if (!baseRow) {
+      // No root base — but the project may own this component directly.
+      const ownedRow = findOwnedSpec(db, projectId, componentId);
+      if (ownedRow) {
+        return resolveSpec(ownedRow, null);
+      }
       throw new ComponentsError(
         'COMPONENT_NOT_FOUND',
         `Component '${componentId}' not found`
@@ -275,7 +319,7 @@ export async function listSpecs(projectId: string): Promise<ResolvedComponentSpe
       )
       .all(projectId) as any[];
 
-    return rows.map((row) => {
+    const inherited = rows.map((row) => {
       const baseRow = {
         id: row.id,
         project_id: row.project_id,
@@ -291,6 +335,25 @@ export async function listSpecs(projectId: string): Promise<ResolvedComponentSpe
 
       return resolveSpec(baseRow, effectiveOverride);
     });
+
+    // Components owned directly by this project whose id is NOT a root base spec
+    // (i.e. genuinely child-owned, not overrides of inherited components).
+    const ownedRows = db
+      .prepare(
+        `SELECT cs.id, cs.project_id, cs.spec_json, cs.version
+         FROM component_specs cs
+         WHERE cs.project_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM component_specs b
+             INNER JOIN projects p ON p.id = b.project_id
+             WHERE b.id = cs.id AND p.parent_id IS NULL
+           )`
+      )
+      .all(projectId) as any[];
+    const owned = ownedRows.map((row) => resolveSpec(row, null));
+
+    // Child-owned components first, then inherited.
+    return [...owned, ...inherited];
   } finally {
     db.close();
   }
@@ -303,32 +366,33 @@ export async function updateSpec(
     version: number;
     name?: string;
     description?: string;
-    props?: ComponentProp[];
-    variants?: string[];
-    states?: string[];
-    usageRules?: string[];
-    accessibilityNotes?: string[];
+    // Accept either array or object-map shapes (normalized at storage).
+    props?: unknown;
+    variants?: unknown;
+    states?: unknown;
+    usageRules?: unknown;
+    accessibilityNotes?: unknown;
   }
 ): Promise<ComponentSpec> {
   await ensureProjectExists(projectId);
 
   const db = getDb();
   try {
-    const baseRow = findBaseSpec(db, componentId);
-    if (!baseRow) {
+    // Target the root base spec if one exists; otherwise a component owned
+    // directly by this project (child-owned components are updatable too).
+    const targetRow = findBaseSpec(db, componentId) ?? findOwnedSpec(db, projectId, componentId);
+    if (!targetRow) {
       throw new ComponentsError(
         'COMPONENT_NOT_FOUND',
         `Component '${componentId}' not found`
       );
     }
 
-    const existing = JSON.parse(baseRow.spec_json);
+    const existing = JSON.parse(targetRow.spec_json);
     const { version, ...fields } = input;
 
-    // updateSpec always operates on the BASE spec row (baseRow.project_id), regardless of
-    // which projectId was passed by the caller.  The projectId param here is only used to
-    // validate that the caller's project exists — it does not scope the write.
-    // Merge: only update fields present in input
+    // For a root base spec, the write targets that base row (shared by children).
+    // For a child-owned spec, it targets the owning project's own row.
     const updated: any = { ...existing };
     for (const [k, v] of Object.entries(fields)) {
       if (v !== undefined) {
@@ -343,7 +407,7 @@ export async function updateSpec(
         `UPDATE component_specs SET spec_json = ?, version = version + 1
          WHERE id = ? AND project_id = ? AND version = ?`
       )
-      .run(newSpecJson, componentId, baseRow.project_id, version);
+      .run(newSpecJson, componentId, targetRow.project_id, version);
 
     if (result.changes === 0) {
       throw new ComponentsError('CONFLICT', `Version conflict on component '${componentId}'`);
@@ -351,7 +415,7 @@ export async function updateSpec(
 
     const updatedRow = db
       .prepare('SELECT * FROM component_specs WHERE id = ? AND project_id = ?')
-      .get(componentId, baseRow.project_id) as any;
+      .get(componentId, targetRow.project_id) as any;
 
     return rowToSpec(updatedRow);
   } finally {
@@ -365,15 +429,21 @@ export async function deleteSpec(projectId: string, componentId: string): Promis
   const db = getDb();
   try {
     const baseRow = findBaseSpec(db, componentId);
-    if (!baseRow) {
+    if (baseRow) {
+      // Root base: delete base row AND all override rows (same id).
+      db.prepare('DELETE FROM component_specs WHERE id = ?').run(componentId);
+      return;
+    }
+
+    // Otherwise it may be a component owned directly by this project.
+    const ownedRow = findOwnedSpec(db, projectId, componentId);
+    if (!ownedRow) {
       throw new ComponentsError(
         'COMPONENT_NOT_FOUND',
         `Component '${componentId}' not found`
       );
     }
-
-    // Delete base row AND all override rows (same id, different project_ids)
-    db.prepare('DELETE FROM component_specs WHERE id = ?').run(componentId);
+    db.prepare('DELETE FROM component_specs WHERE id = ? AND project_id = ?').run(componentId, projectId);
   } finally {
     db.close();
   }

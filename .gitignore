@@ -21,3 +21,15 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*.bak
+
+# Local agent / tooling state
+.claude/
+.requ/
+.playwright-mcp/
+
+# Local SQLite data
+data/
+*.db
+*.db-shm
+*.db-wal
