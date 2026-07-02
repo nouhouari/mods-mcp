@@ -19,6 +19,70 @@ modules/
   db/           # Shared SQLite connection + migrations
 ```
 
+## Inheritance model
+
+Every project carries a nullable `parentId` (`registry`):
+
+- A project with `parentId = null` is a **base** design system.
+- A project with a `parentId` is a **child** that inherits from its base and may
+  **override** individual tokens, component-spec fields, and patterns.
+- Inheritance is **two levels deep only** — creating a child of a child is
+  rejected with `MAX_INHERITANCE_DEPTH` (no grandchildren).
+- A base cannot be deleted while it still has children (`BASE_HAS_CHILDREN`), and
+  a project cannot be deleted while it still owns tokens (`PROJECT_HAS_TOKENS`).
+
+```mermaid
+graph TD
+    Base["<b>Base design system</b><br/>parentId = null"]
+    ChildA["<b>Child: Brand A</b><br/>parentId = Base"]
+    ChildB["<b>Child: Brand B</b><br/>parentId = Base"]
+    GC(["Grandchild<br/>❌ MAX_INHERITANCE_DEPTH"])
+
+    Base --> ChildA
+    Base --> ChildB
+    ChildA -. rejected .-> GC
+
+    classDef base fill:#1f4e5f,stroke:#0d2b36,color:#fff;
+    classDef child fill:#2d6a4f,stroke:#1b4332,color:#fff;
+    classDef bad fill:#7f1d1d,stroke:#450a0a,color:#fff,stroke-dasharray: 4 3;
+    class Base base;
+    class ChildA,ChildB child;
+    class GC bad;
+```
+
+### How values resolve
+
+`resolveTokens` (and the equivalent component/pattern resolvers) merge the base
+layer with the child's own layer. For a **base** project every value is tagged
+`source: "base"`; for a **child** the base values are inherited and any keys the
+child defines win, tagged `source: "override"`:
+
+```mermaid
+flowchart LR
+    subgraph BASE["Base project (parent)"]
+        BA["color.primary = #1f4e5f"]
+        BB["color.surface = #ffffff"]
+        BC["radius.md = 8px"]
+    end
+
+    subgraph CHILD["Child project (own layer)"]
+        OA["color.primary = #2d6a4f"]
+    end
+
+    BASE -->|"inherited (source: base)"| R
+    CHILD -->|"overrides (source: override)"| R
+
+    subgraph R["resolveTokens(child) → resolved set"]
+        RA["color.primary = #2d6a4f  (override)"]
+        RB["color.surface = #ffffff  (base)"]
+        RC["radius.md = 8px  (base)"]
+    end
+```
+
+Resolution order is: start from the parent's values, then apply the child's own
+values by key — so a child key of the same name replaces the inherited one while
+every un-overridden base key flows through unchanged.
+
 ## Running locally
 
 ### Prerequisites

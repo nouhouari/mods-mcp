@@ -79,8 +79,13 @@ export function runMigrations(db: Database.Database): void {
       .filter(f => /^\d+_.*\.sql$/.test(f))
       .sort(); // lexicographic sort works because filenames are zero-padded NNN_
   } catch (e) {
-    // No migrations directory yet — nothing to apply
-    return;
+    // A missing migrations directory means the build/packaging is broken
+    // (e.g. .sql files not copied next to the compiled JS). Fail loudly
+    // instead of silently starting with an empty schema.
+    throw new Error(
+      `Migrations directory not found at ${migrationsDir}. ` +
+        `Ensure migration .sql files are packaged alongside the compiled output.`
+    );
   }
 
   // 3. Apply only unapplied migrations
